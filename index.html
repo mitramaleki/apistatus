@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -25,9 +25,9 @@ th{background:#f8f9fa}
 </head>
 <body>
 <h1>URL Status Checker</h1>
-<p>Enter URLs (one per line) to see if they're active (any HTTP response) or nonâ€‘active.</p>
+<p>Enter URLs (one per line) to see if they're active (any HTTP response) or non‑active.</p>
 <textarea id="urlInput" placeholder="example.com&#10;google.com&#10;github.com"></textarea>
-<button id="checkBtn">CheckBtn>Check URLs</button>
+<button id="checkBtn">Check URLs</button>
 <div id="progress"></div>
 <div id="results"></div>
 
@@ -35,103 +35,110 @@ th{background:#f8f9fa}
 document.getElementById('checkBtn').addEventListener('click', checkUrls);
 
 async function checkUrls() {
-const ta=document.getElementById('urlInput');
-const prog=document.getElementById('progress');
-const res=document.getElementById('results');
-const btn=document.getElementById('checkBtn');
+    const ta   = document.getElementById('urlInput');
+    const prog = document.getElementById('progress');
+    const res  = document.getElementById('results');
+    const btn  = document.getElementById('checkBtn');
 
-const text=ta.value.trim();
-if(!text){alert('Please enter at least one URL');return;}
-const urls=text.split('\n').map(l=>l.trim()).filter(l=>l.length);
-const total=urls.length;
+    const text = ta.value.trim();
+    if (!text) { alert('Please enter at least one URL'); return; }
 
-btn.disabled=true;
-prog.textContent='Starting check...';
-res.innerHTML='';
+    const urls = text.split('\n').map(l => l.trim()).filter(l => l.length);
+    const total = urls.length;
 
-const results=[];
-let active=0;
+    btn.disabled = true;
+    prog.textContent = 'Starting check...';
+    res.innerHTML = '';
 
-for(let i=0;i<urls.length;i++){
-const url=urls[i];
-prog.textContent=`[${i+1}/${total}] Checking: ${url}`;
-try{
-const {statusLabel,statusInfo}=await checkUrl(url);
-results.push({url,statusLabel,statusInfo});
-if(statusLabel==='Active')active++;
-}catch(err){
-results.push({url,statusLabel:'Non-active',statusInfo:err.message||'Unknown error'});
-}
-if(i<urls.length-1){await new Promise(r=>setTimeout(r,300));}
-}
+    const results = [];
+    let active = 0;
 
-btn.disabled=false;
-prog.textContent=`Check complete! ${active} active / ${total} total.`;
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        prog.textContent = `[${i + 1}/${total}] Checking: ${url}`;
 
-if(results.length===0){
-res.innerHTML='<div class="empty">No results to display.</div>';
-return;
-}
+        try {
+            const { statusLabel, statusInfo } = await checkUrl(url);
+            results.push({ url, statusLabel, statusInfo });
+            if (statusLabel === 'Active') active++;
+        } catch (err) {
+            results.push({ url, statusLabel: 'Non-active', statusInfo: err.message || 'Unknown error' });
+        }
 
-res.innerHTML=`
-<h2>Results</h2>
-<table>
-<thead><tr><th>URL</th><th>Status</th><th>Details</th></tr></thead>
-<tbody>
-${results.map(r=>`
-<tr>
-<td>${r.url}</td>
-<td class="status-${r.statusLabel.toLowerCase().replace(/\//g,'-')}">${r.statusLabel}</td>
-<td class="details">${r.statusInfo}</td>
-</tr>
-`).join('')}
-</tbody>
-</table>
-`;
+        if (i < urls.length - 1) { await new Promise(r => setTimeout(r, 300)); }
+    }
 
-// CSV download
-const csvBlob=new Blob([resultsToCSV(results)],{type:'text/csv;charset=utf-8;'});
-const csvUrl=URL.createObjectURL(csvBlob);
-const dl=document.createElement('a');
-dl.href=csvUrl;
-dl.download=`url_status_${new Date().toISOString().slice(0,10)}.csv`;
-dl.className='download';
-dl.textContent='Download CSV';
-res.appendChild(dl);
-}
+    btn.disabled = false;
+    prog.textContent = `Check complete! ${active} active / ${total} total.`;
 
-async function checkUrl(url){
-// Ensure scheme
-if(!/^https?:\/\//i.test(url))url='http://'+url;
+    if (results.length === 0) {
+        res.innerHTML = '<div class="empty">No results to display.</div>';
+        return;
+    }
 
-// CORS proxy
-const proxy='https://api.allorigins.win/raw?url='+encodeURIComponent(url);
+    res.innerHTML = `
+        <h2>Results</h2>
+        <table>
+            <thead><tr><th>URL</th><th>Status</th><th>Details</th></tr></thead>
+            <tbody>
+                ${results.map(r => `
+                    <tr>
+                        <td>${r.url}</td>
+                        <td class="status-${r.statusLabel.toLowerCase().replace(/\//g, '-')}">${r.statusLabel}</td>
+                        <td class="details">${r.statusInfo}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
 
-// Timeout controller
-const controller=new AbortController();
-const timeout=setTimeout(()=>controller.abort(),8000);
-try{
-const response=await fetch(proxy,{signal:controller.signal});
-clearTimeout(timeout);
-// Any HTTP response => Active
-return {statusLabel:'Active',statusInfo:response.status.toString()};
-}catch(err){
-clearTimeout(timeout);
-if(err.name==='AbortError'){
-return {statusLabel:'Non-active',statusInfo:'Request timed out (8s)'};
-}
-return {statusLabel:'Non-active',statusInfo:err.message||'Unknown error'};
-}
+    // CSV download link
+    const csvBlob = new Blob([resultsToCSV(results)], {type: 'text/csv;charset=utf-8;'});
+    const csvUrl  = URL.createObjectURL(csvBlob);
+    const dl      = document.createElement('a');
+    dl.href       = csvUrl;
+    dl.download   = `url_status_${new Date().toISOString().slice(0,10)}.csv`;
+    dl.className  = 'download';
+    dl.textContent= 'Download CSV';
+    res.appendChild(dl);
 }
 
-function resultsToCSV(results){
-let csv='URL,Status,Details\n';
-for(const r of results){
-const esc=s=>String(s).replace(/"/g,'""').replace(/,/g,',').replace(/\n/g,' ');
-csv+=`"${esc(r.url)}","${esc(r.statusLabel)}","${esc(r.statusInfo)}"\n`;
+async function checkUrl(url) {
+    // Ensure scheme
+    if (!/^https?:\/\//i.test(url)) url = 'http://' + url;
+
+    // CORS proxy (free, no key needed)
+    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+
+    // Timeout controller
+    const controller = new AbortController();
+    const timeout    = setTimeout(() => controller.abort(), 8000); // 8‑second timeout
+
+    try {
+        const response = await fetch(proxy, {signal: controller.signal});
+        clearTimeout(timeout);
+        // Any HTTP response (2xx,3xx,4xx,5xx) means the server responded → Active
+        return { statusLabel: 'Active', statusInfo: response.status.toString() };
+    } catch (err) {
+        clearTimeout(timeout);
+        if (err.name === 'AbortError') {
+            return { statusLabel: 'Non-active', statusInfo: 'Request timed out (8s)' };
+        }
+        return { statusLabel: 'Non-active', statusInfo: err.message || 'Unknown error' };
+    }
 }
-return csv;
+
+function resultsToCSV(results) {
+    let csv = 'URL,Status,Details\n';
+    for (const r of results) {
+        const esc = s => String(s)
+            .replace(/"/g, '""')
+            .replace(/,/g, ',')
+            .replace(/\n/g, ' ');
+        csv += `"${esc(r.url)}","${esc(r.statusLabel)}","${esc(r.statusInfo)}"\n`;
+    }
+    return csv;
 }
 </script>
 </body>
-  <!-- Version 2026-07-03-2 -->`n</html>
+</html>
