@@ -10,17 +10,18 @@
             max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f8f9fa;
+            background-color: #fff5f7;
             color: #333;
         }
         h1 {
-            color: #2c3e50;
+            color: #e91e63;
             text-align: center;
             margin-bottom: 10px;
+            font-size: 2.2em;
         }
         .subtitle {
             text-align: center;
-            color: #7f8c8d;
+            color: #c2185b;
             margin-bottom: 30px;
             font-size: 1.1em;
         }
@@ -28,46 +29,54 @@
             width: 100%;
             height: 150px;
             padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
+            border: 1px solid #f8bbd9;
+            border-radius: 10px;
             font-family: monospace;
             resize: vertical;
             box-sizing: border-box;
             font-size: 14px;
             background-color: #fff;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #e91e63;
+            box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.2);
         }
         button {
-            background-color: #3498db;
+            background-color: #e91e63;
             color: white;
             padding: 14px 24px;
             border: none;
-            border-radius: 6px;
+            border-radius: 10px;
             cursor: pointer;
             font-size: 16px;
             width: 100%;
             margin: 10px 0;
             transition: background-color 0.2s;
+            font-weight: 600;
         }
         button:hover {
-            background-color: #2980b9;
+            background-color: #c2185b;
         }
         button:disabled {
-            background-color: #bdc3c7;
+            background-color: #f8bbd9;
             cursor: not-allowed;
         }
         #progress {
             margin: 20px 0;
             padding: 15px;
-            background-color: #ecf0f1;
-            border-radius: 6px;
+            background-color: #fce4ec;
+            border-radius: 10px;
             min-height: 20px;
             text-align: center;
+            color: #c2185b;
         }
         #results {
             margin-top: 25px;
             padding: 20px;
             background-color: white;
-            border-radius: 8px;
+            border-radius: 10px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         table {
@@ -78,15 +87,15 @@
         th, td {
             padding: 14px;
             text-align: left;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid #f8bbd9;
         }
         th {
-            background-color: #f1f2f6;
+            background-color: #fce4ec;
             font-weight: 600;
-            color: #2c3e50;
+            color: #c2185b;
         }
         tr:hover {
-            background-color: #f8f9fa;
+            background-color: #fff5f7;
         }
         .status-active {
             color: #27ae60;
@@ -112,7 +121,7 @@
         }
         .loading {
             text-align: center;
-            color: #7f8c8d;
+            color: #c2185b;
             font-style: italic;
         }
         .spinner {
@@ -128,6 +137,12 @@
         }
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        .redirect-url {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 4px;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -168,11 +183,12 @@
                 progressDiv.innerHTML = `<div class="loading">[${i + 1}/${urls.length}] Checking: ${url}</div>`;
 
                 try {
-                    const { statusLabel, statusInfo } = await checkUrl(url);
+                    const { statusLabel, statusInfo, finalUrl } = await checkUrl(url);
                     results.push({
                         url: url,
                         statusLabel: statusLabel,
-                        statusInfo: statusInfo
+                        statusInfo: statusInfo,
+                        finalUrl: finalUrl || null
                     });
 
                     if (statusLabel === 'Active') {
@@ -182,7 +198,8 @@
                     results.push({
                         url: url,
                         statusLabel: 'Non-active',
-                        statusInfo: `Error: ${error.message}`
+                        statusInfo: `Error: ${error.message}`,
+                        finalUrl: null
                     });
                 }
 
@@ -209,7 +226,10 @@
                         <tbody>
                             ${results.map(r => `
                                 <tr>
-                                    <td>${r.url}</td>
+                                    <td>
+                                        ${r.url}
+                                        ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
+                                    </td>
                                     <td class="status-${r.statusLabel.toLowerCase().replace('/', '-')}">${r.statusLabel}</td>
                                     <td>${r.statusInfo}</td>
                                 </tr>
@@ -244,7 +264,8 @@
 
             try {
                 const response = await fetch(proxyUrl, {
-                    signal: controller.signal
+                    signal: controller.signal,
+                    redirect: 'follow'
                 });
                 clearTimeout(timeoutId);
 
@@ -252,15 +273,30 @@
                 if (!response.ok) {
                     return {
                         statusLabel: 'Non-active',
-                        statusInfo: `Proxy error: HTTP ${response.status}`
+                        statusInfo: `Proxy error: HTTP ${response.status}`,
+                        finalUrl: null
                     };
                 }
 
                 // If we get here, the proxy returned a 2xx response,
                 // meaning the target site responded successfully through the proxy
+                let statusInfo = `HTTP ${response.status}`;
+                let finalUrl = url;
+
+                // Try to detect redirects by parsing the proxy URL
+                // api.allorigins.win returns the final URL in the response URL
+                if (response.url && response.url !== proxyUrl) {
+                    const finalUrlMatch = response.url.match(/url=([^&]+)/);
+                    if (finalUrlMatch) {
+                        finalUrl = decodeURIComponent(finalUrlMatch[1]);
+                        statusInfo += ` | Redirected`;
+                    }
+                }
+
                 return {
                     statusLabel: 'Active',
-                    statusInfo: `HTTP ${response.status}`
+                    statusInfo: statusInfo,
+                    finalUrl: finalUrl
                 };
 
             } catch (error) {
@@ -268,18 +304,20 @@
                 if (error.name === 'AbortError') {
                     return {
                         statusLabel: 'Non-active',
-                        statusInfo: 'Request timed out (8s)'
+                        statusInfo: 'Request timed out (8s)',
+                        finalUrl: null
                     };
                 }
                 return {
                     statusLabel: 'Non-active',
-                    statusInfo: `Failed to fetch: ${error.message}`
+                    statusInfo: `Failed to fetch: ${error.message}`,
+                    finalUrl: null
                 };
             }
         }
 
         function downloadCsv(results) {
-            let csv = 'URL,Active/Non-active,Status\n';
+            let csv = 'URL,Active/Non-active,Status,Final URL\n';
             results.forEach(row => {
                 const escapeCsv = (field) => {
                     if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
@@ -287,7 +325,7 @@
                     }
                     return field;
                 };
-                csv += `${escapeCsv(row.url)},${escapeCsv(row.statusLabel)},${escapeCsv(row.statusInfo)}\n`;
+                csv += `${escapeCsv(row.url)},${escapeCsv(row.statusLabel)},${escapeCsv(row.statusInfo)},${escapeCsv(row.finalUrl || '')}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
