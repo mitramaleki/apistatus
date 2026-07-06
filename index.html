@@ -150,6 +150,11 @@
       font-weight: 600;
     }
 
+    .status-parked {
+      color: #9c27b0;
+      font-weight: 600;
+    }
+
     .status-non-active {
       color: #f44336;
       font-weight: 600;
@@ -232,6 +237,15 @@ https://another.example"></textarea><br>
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
 
+    // Detect parking pages (e.g., huge domains)
+    function isParkingPage(url) {
+      return url.includes('hugedomains.com') ||
+             url.includes('sedoparking.com') ||
+             url.includes('parkingcrew.net') ||
+             url.includes('domainsponsor.com');
+      // Add more known parking domains if needed
+    }
+
     // Check a single URL
     async function checkUrl(url) {
       const proxyFullUrl = proxyUrl + encodeURIComponent(url);
@@ -253,8 +267,13 @@ https://another.example"></textarea><br>
 
           // Detect redirect
           if (finalUrl && finalUrl !== proxyFullUrl) {
-            statusLabel = 'Redirected';
-            statusInfo += ' | Redirected';
+            if (isParkingPage(finalUrl)) {
+              statusLabel = 'Parked';
+              statusInfo += ' | Redirected to parking page';
+            } else {
+              statusLabel = 'Redirected';
+              statusInfo += ' | Redirected';
+            }
           }
 
           return {
@@ -311,11 +330,12 @@ https://another.example"></textarea><br>
       // Count statuses
       const activeCount = fulfilledResults.filter(r => r.statusLabel === 'Active').length;
       const redirectedCount = fulfilledResults.filter(r => r.statusLabel === 'Redirected').length;
+      const parkedCount = fulfilledResults.filter(r => r.statusLabel === 'Parked').length;
       const nonActiveCount = fulfilledResults.filter(r => r.statusLabel === 'Non-active').length;
 
       // Update summary
       summaryElem.textContent =
-        `Check complete! Found ${activeCount} active, ${redirectedCount} redirected, ${nonActiveCount} non-active out of ${fulfilledResults.length}.`;
+        `Check complete! Found ${activeCount} active, ${redirectedCount} redirected, ${parkedCount} parked, ${nonActiveCount} non-active out of ${fulfilledResults.length}.`;
 
       // Render results
       resultsElem.innerHTML = fulfilledResults.map(r => `
