@@ -229,20 +229,18 @@ https://another.example"></textarea><br>
   </div>
 
   <script>
-    const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
 
     // Check a single URL
     async function checkUrl(url) {
-      const proxyFullUrl = proxyUrl + encodeURIComponent(url);
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const response = await fetch(proxyFullUrl, {
+        const response = await fetch(url, {
           signal: controller.signal,
-          redirect: 'follow'
+          redirect: 'follow',
+          mode: 'cors'
         });
         clearTimeout(timeoutId);
 
@@ -251,12 +249,8 @@ https://another.example"></textarea><br>
           let statusLabel = 'Active';
           let statusInfo = 'HTTP ' + response.status;
 
-          // Remove proxy prefix from finalUrl for comparison
-          const cleanFinalUrl = finalUrl.replace(proxyUrl, '');
-          const cleanOriginalUrl = url;
-
           // Detect redirect: only if final URL differs from original URL
-          if (cleanFinalUrl && cleanFinalUrl !== cleanOriginalUrl) {
+          if (finalUrl && finalUrl !== url) {
             statusLabel = 'Redirected';
             statusInfo += ' | Redirected';
           }
@@ -328,7 +322,7 @@ https://another.example"></textarea><br>
         <tr>
           <td>
             <a href="${r.url}" target="_blank">${r.url}</a>
-            ${r.finalUrl && r.finalUrl.replace(proxyUrl, '') !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
+            ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
           </td>
           <td class="status-${r.statusLabel.toLowerCase().replace('/', '-')}">${r.statusLabel}</td>
           <td>${r.statusInfo}</td>
