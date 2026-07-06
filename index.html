@@ -308,9 +308,8 @@ https://another.example"></textarea><br>
         .filter(r => r.status === 'fulfilled')
         .map(r => r.value);
 
-      // Update summary (no breakdown by status, just total)
-      summaryElem.textContent =
-        `Found ${fulfilledResults.length} out of ${urls.length} URLs`;
+      // Update summary (no numbers)
+      summaryElem.textContent = 'Check complete!';
 
       // Render results
       resultsElem.innerHTML = fulfilledResults.map(r => `
