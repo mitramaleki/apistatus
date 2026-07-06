@@ -1,14 +1,342 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>TEST PAGE</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Status Checker ✨</title>
     <style>
-        body { background-color: #ff69b4; color: white; text-align: center; padding: 50px; font-family: Arial; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff5f7;
+            color: #333;
+        }
+        h1 {
+            color: #e91e63;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #c2185b;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            border: 1px solid #f8bbd9;
+            border-radius: 10px;
+            font-family: monospace;
+            resize: vertical;
+            box-sizing: border-box;
+            font-size: 14px;
+            background-color: #fff;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #e91e63;
+            box-shadow: 0 0 0 2px rgba(233, 30, 99, 0.2);
+        }
+        button {
+            background-color: #e91e63;
+            color: white;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin: 10px 0;
+            transition: background-color 0.2s;
+            font-weight: 600;
+        }
+        button:hover {
+            background-color: #c2185b;
+        }
+        button:disabled {
+            background-color: #f8bbd9;
+            cursor: not-allowed;
+        }
+        #progress {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fce4ec;
+            border-radius: 10px;
+            min-height: 20px;
+            text-align: center;
+            color: #c2185b;
+        }
+        #results {
+            margin-top: 25px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 14px;
+            text-align: left;
+            border-bottom: 1px solid #f8bbd9;
+        }
+        th {
+            background-color: #fce4ec;
+            font-weight: 600;
+            color: #c2185b;
+        }
+        tr:hover {
+            background-color: #fff5f7;
+        }
+        .status-active {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .status-non-active {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .download-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background-color: #27ae60;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        .download-btn:hover {
+            background-color: #219653;
+        }
+        .loading {
+            text-align: center;
+            color: #c2185b;
+            font-style: italic;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .redirect-url {
+            font-size: 0.85em;
+            color: #7f8c8d;
+            margin-top: 4px;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
-    <h1>TEST PAGE</h1>
-    <p>If you see this, GitHub Pages is working.</p>
-    <!-- 🐟 Namazu fixed this code -->
+    <h1>URL Status Checker</h1>
+    <p class="subtitle">Enter URLs (one per line) to check if they're active (HTTP 2xx) or non‑active.</p>
+    <textarea id="urlInput" placeholder="Enter one URL per line&#10;example.com&#10;google.com&#10;github.com"></textarea>
+    <button id="checkBtn">Check URLs</button>
+    <div id="progress" class="loading"></div>
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('checkBtn').addEventListener('click', checkUrls);
+
+        async function checkUrls() {
+            const urlInput = document.getElementById('urlInput');
+            const progressDiv = document.getElementById('progress');
+            const resultsDiv = document.getElementById('results');
+            const checkBtn = document.getElementById('checkBtn');
+
+            const text = urlInput.value.trim();
+            if (!text) {
+                alert('Please enter at least one URL');
+                return;
+            }
+
+            const urls = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<span class="spinner"></span> Checking...';
+            progressDiv.innerHTML = '<div class="loading">Starting check...</div>';
+            resultsDiv.innerHTML = '';
+
+            const results = [];
+            let activeCount = 0;
+
+            for (let i = 0; i < urls.length; i++) {
+                const url = urls[i];
+                progressDiv.innerHTML = `<div class="loading">[${i + 1}/${urls.length}] Checking: ${url}</div>`;
+
+                try {
+                    const { statusLabel, statusInfo, finalUrl } = await checkUrl(url);
+                    results.push({
+                        url: url,
+                        statusLabel: statusLabel,
+                        statusInfo: statusInfo,
+                        finalUrl: finalUrl || null
+                    });
+
+                    if (statusLabel === 'Active') {
+                        activeCount++;
+                    }
+                } catch (error) {
+                    results.push({
+                        url: url,
+                        statusLabel: 'Non-active',
+                        statusInfo: `Error: ${error.message}`,
+                        finalUrl: null
+                    });
+                }
+
+                if (i < urls.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
+            checkBtn.disabled = false;
+            checkBtn.textContent = 'Check URLs';
+            progressDiv.innerHTML = `<div class="loading">Check complete! Found ${activeCount} active URLs out of ${urls.length}.</div>`;
+
+            if (results.length > 0) {
+                resultsDiv.innerHTML = `
+                    <h2>Results</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${results.map(r => `
+                                <tr>
+                                    <td>
+                                        ${r.url}
+                                        ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
+                                    </td>
+                                    <td class="status-${r.statusLabel.toLowerCase().replace('/', '-')}">${r.statusLabel}</td>
+                                    <td>${r.statusInfo}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+
+                resultsDiv.innerHTML += `
+                    <button class="download-btn" id="downloadBtn">Download Results as CSV</button>
+                `;
+
+                document.getElementById('downloadBtn').addEventListener('click', () => {
+                    downloadCsv(results);
+                });
+            } else {
+                resultsDiv.innerHTML = '<p>No results to display.</p>';
+            }
+        }
+
+        async function checkUrl(url) {
+            // Ensure URL has a scheme
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Use CORS proxy
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+            try {
+                const response = await fetch(proxyUrl, {
+                    signal: controller.signal,
+                    redirect: 'follow'
+                });
+                clearTimeout(timeoutId);
+
+                // If the proxy itself returns an error status (4xx, 5xx), treat as non-active
+                if (!response.ok) {
+                    return {
+                        statusLabel: 'Non-active',
+                        statusInfo: `Proxy error: HTTP ${response.status}`,
+                        finalUrl: null
+                    };
+                }
+
+                // If we get here, the proxy returned a 2xx response,
+                // meaning the target site responded successfully through the proxy
+                let statusInfo = `HTTP ${response.status}`;
+                let finalUrl = url;
+
+                // Try to detect redirects by parsing the proxy URL
+                // api.allorigins.win returns the final URL in the response URL
+                if (response.url && response.url !== proxyUrl) {
+                    const finalUrlMatch = response.url.match(/url=([^&]+)/);
+                    if (finalUrlMatch) {
+                        finalUrl = decodeURIComponent(finalUrlMatch[1]);
+                        statusInfo += ` | Redirected`;
+                    }
+                }
+
+                return {
+                    statusLabel: 'Active',
+                    statusInfo: statusInfo,
+                    finalUrl: finalUrl
+                };
+
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    return {
+                        statusLabel: 'Non-active',
+                        statusInfo: 'Request timed out (8s)',
+                        finalUrl: null
+                    };
+                }
+                return {
+                    statusLabel: 'Non-active',
+                    statusInfo: `Failed to fetch: ${error.message}`,
+                    finalUrl: null
+                };
+            }
+        }
+
+        function downloadCsv(results) {
+            let csv = 'URL,Active/Non-active,Status,Final URL\n';
+            results.forEach(row => {
+                const escapeCsv = (field) => {
+                    if (typeof field === 'string' && (field.includes(',') || field.includes('"') || field.includes('\n'))) {
+                        return `"${field.replace(/"/g, '""')}"`;
+                    }
+                    return field;
+                };
+                csv += `${escapeCsv(row.url)},${escapeCsv(row.statusLabel)},${escapeCsv(row.statusInfo)},${escapeCsv(row.finalUrl || '')}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `url_check_results_${new Date().toISOString().slice(0,10).replace(/:/g, '-')}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
 </body>
 </html>
