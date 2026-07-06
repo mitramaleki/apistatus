@@ -308,14 +308,8 @@ https://another.example"></textarea><br>
         .filter(r => r.status === 'fulfilled')
         .map(r => r.value);
 
-      // Count statuses
-      const activeCount = fulfilledResults.filter(r => r.statusLabel === 'Active').length;
-      const redirectedCount = fulfilledResults.filter(r => r.statusLabel === 'Redirected').length;
-      const nonActiveCount = fulfilledResults.filter(r => r.statusLabel === 'Non-active').length;
-
-      // Update summary
-      summaryElem.textContent =
-        `Check complete! Found ${activeCount} active, ${redirectedCount} redirected, ${nonActiveCount} non-active out of ${fulfilledResults.length}.`;
+      // Update summary (no numbers)
+      summaryElem.textContent = 'Check complete!';
 
       // Render results
       resultsElem.innerHTML = fulfilledResults.map(r => `
