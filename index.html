@@ -229,18 +229,20 @@ https://another.example"></textarea><br>
   </div>
 
   <script>
+    const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
 
     // Check a single URL
     async function checkUrl(url) {
+      const proxyFullUrl = proxyUrl + encodeURIComponent(url);
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(proxyFullUrl, {
           signal: controller.signal,
-          redirect: 'follow',
-          mode: 'cors'
+          redirect: 'follow'
         });
         clearTimeout(timeoutId);
 
@@ -249,7 +251,7 @@ https://another.example"></textarea><br>
           let statusLabel = 'Active';
           let statusInfo = 'HTTP ' + response.status;
 
-          // Detect redirect: only if final URL differs from original URL
+          // Detect redirect: compare finalUrl with original url (not proxyFullUrl)
           if (finalUrl && finalUrl !== url) {
             statusLabel = 'Redirected';
             statusInfo += ' | Redirected';
@@ -309,6 +311,8 @@ https://another.example"></textarea><br>
           const result = await checkUrl(url);
           fulfilledResults.push(result);
         } catch (err) {
+          // Should not happen because checkUrl uses Promise.allSettled internally,
+          // but just in case
           console.error('Unexpected error:', err);
         }
       }
