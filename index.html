@@ -278,26 +278,39 @@
                     };
                 }
 
-                // If we get here, the proxy returned a 2xx response,
-                // meaning the target site responded successfully through the proxy
-                let statusInfo = `HTTP ${response.status}`;
-                let finalUrl = url;
+                // Now, try to fetch the final URL directly to detect redirects
+                // We'll use a second fetch to the original URL (not proxy) with 'follow' redirects
+                // and read response.url to get the final destination
+                const directController = new AbortController();
+                const directTimeoutId = setTimeout(() => directController.abort(), 5000); // 5s for redirect check
 
-                // Try to detect redirects by parsing the proxy URL
-                // api.allorigins.win returns the final URL in the response URL
-                if (response.url && response.url !== proxyUrl) {
-                    const finalUrlMatch = response.url.match(/url=([^&]+)/);
-                    if (finalUrlMatch) {
-                        finalUrl = decodeURIComponent(finalUrlMatch[1]);
-                        statusInfo += ` | Redirected`;
+                try {
+                    const directResponse = await fetch(url, {
+                        signal: directController.signal,
+                        redirect: 'follow'
+                    });
+                    clearTimeout(directTimeoutId);
+
+                    let finalUrl = url;
+                    if (directResponse.url && directResponse.url !== url) {
+                        finalUrl = directResponse.url;
                     }
-                }
 
-                return {
-                    statusLabel: 'Active',
-                    statusInfo: statusInfo,
-                    finalUrl: finalUrl
-                };
+                    return {
+                        statusLabel: 'Active',
+                        statusInfo: `HTTP ${response.status} | Redirected`,
+                        finalUrl: finalUrl
+                    };
+
+                } catch (directError) {
+                    clearTimeout(directTimeoutId);
+                    // If direct fetch fails (CORS, etc.), we still consider it active because proxy succeeded
+                    return {
+                        statusLabel: 'Active',
+                        statusInfo: `HTTP ${response.status} (redirect check failed)`,
+                        finalUrl: null
+                    };
+                }
 
             } catch (error) {
                 clearTimeout(timeoutId);
