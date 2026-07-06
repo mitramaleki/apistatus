@@ -251,8 +251,8 @@ https://another.example"></textarea><br>
           let statusLabel = 'Active';
           let statusInfo = 'HTTP ' + response.status;
 
-          // Detect redirect
-          if (finalUrl && finalUrl !== proxyFullUrl) {
+          // Detect redirect: compare finalUrl with original url (not proxyFullUrl)
+          if (finalUrl && finalUrl !== url) {
             statusLabel = 'Redirected';
             statusInfo += ' | Redirected';
           }
@@ -295,20 +295,29 @@ https://another.example"></textarea><br>
       const exportBtn = document.getElementById('exportBtn');
 
       resultsElem.innerHTML = '';
-      summaryElem.textContent = 'Checking URLs...';
       checkBtn.disabled = true;
       exportBtn.style.display = 'none';
       document.body.classList.add('loading');
       summaryElem.classList.add('pulse');
 
-      const promises = urls.map(url => checkUrl(url));
-      const results = await Promise.allSettled(promises);
+      const fulfilledResults = [];
 
-      const fulfilledResults = results
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value);
+      // Check URLs one by one to show progress
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        summaryElem.textContent = `Checking URL ${i + 1} of ${urls.length}...`;
 
-      // Update summary (no breakdown by status, just total)
+        try {
+          const result = await checkUrl(url);
+          fulfilledResults.push(result);
+        } catch (err) {
+          // Should not happen because checkUrl uses Promise.allSettled internally,
+          // but just in case
+          console.error('Unexpected error:', err);
+        }
+      }
+
+      // Update summary
       summaryElem.textContent =
         `Found ${fulfilledResults.length} out of ${urls.length} URLs`;
 
