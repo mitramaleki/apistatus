@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>API Status Monitor</title>
+  <title>URL Status Checker</title>
   <style>
     body {
       font-family: sans-serif;
@@ -12,6 +12,29 @@
     }
     h1 {
       color: #333;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    button {
+      margin: 10px 0;
+      padding: 8px 16px;
+      background: #007cba;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .summary {
+      margin: 20px 0;
+      font-size: 1.1em;
     }
     table {
       width: 100%;
@@ -44,48 +67,53 @@
       color: #666;
       margin-top: 2px;
     }
-    .summary {
-      margin: 20px 0;
-      font-size: 1.1em;
-    }
     .loading {
       opacity: 0.5;
     }
   </style>
 </head>
 <body>
-  <h1>API Status Monitor</h1>
-  <div class="summary" id="summary">Checking URLs...</div>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>URL</th>
-        <th>Status</th>
-        <th>Info</th>
-      </tr>
-    </thead>
-    <tbody id="results">
-      <!-- Results will be inserted here -->
-    </tbody>
-  </table>
+  <h1>URL Status Checker</h1>
+  <p>Enter URLs (one per line) to check if they're active (HTTP 2xx) or non‑active.</p>
+  <textarea id="urls" placeholder="http://example.com
+https://another.example"></textarea>
+  <br>
+  <button id="checkBtn">Check URLs</button>
+  <div class="summary" id="summary"></div>
+  <div id="resultsContainer" style="display: none;">
+    <table>
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th>Status</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="results">
+        <!-- Results will be inserted here -->
+      </tbody>
+    </table>
+    <br>
+    <button id="exportBtn">Download Results as CSV</button>
+  </div>
 
   <script>
     // Configuration
-    const urls = [
-      { name: 'Example API', url: 'https://httpbin.org/status/200' },
-      { name: 'Example Redirect', url: 'https://httpbin.org/redirect-to?url=https://httpbin.org/status/200' },
-      { name: 'Example 404', url: 'https://httpbin.org/status/404' },
-      { name: 'Example Error', url: 'https://invalid.example' },
-      // Add your own URLs here
-    ];
-
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
 
+    // DOM elements
+    const urlsTextarea = document.getElementById('urls');
+    const checkBtn = document.getElementById('checkBtn');
+    const summaryElem = document.getElementById('summary');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const resultsElem = document.getElementById('results');
+    const exportBtn = document.getElementById('exportBtn');
+
+    let lastResults = [];
+
     // Check a single URL
-    async function checkUrl(urlObj) {
-      const { name, url } = urlObj;
+    async function checkUrl(url) {
       const proxyFullUrl = proxyUrl + encodeURIComponent(url);
 
       const controller = new AbortController();
@@ -101,16 +129,15 @@
         if (response.ok) {
           const finalUrl = response.url;
           let statusLabel = 'Active';
-          let statusInfo = '';
+          let statusInfo = `HTTP ${response.status}`;
 
           // Detect redirect
           if (finalUrl !== proxyFullUrl) {
             statusLabel = 'Redirected';
-            statusInfo += '| Redirected';
+            statusInfo += ' | Redirected';
           }
 
           return {
-            name,
             url,
             finalUrl,
             statusLabel,
@@ -119,7 +146,6 @@
           };
         } else {
           return {
-            name,
             url,
             statusLabel: 'Non-active',
             statusInfo: `HTTP ${response.status}`,
@@ -129,7 +155,6 @@
       } catch (error) {
         clearTimeout(timeoutId);
         return {
-          name,
           url,
           statusLabel: 'Non-active',
           statusInfo: error.message,
@@ -140,18 +165,25 @@
 
     // Check all URLs and update the table
     async function checkUrls() {
-      const resultsElem = document.getElementById('results');
-      const summaryElem = document.getElementById('summary');
-      resultsElem.innerHTML = '';
+      const urls = urlsTextarea.value.trim().split('\n').filter(u => u.trim());
+      if (urls.length === 0) {
+        summaryElem.textContent = 'Please enter at least one URL.';
+        return;
+      }
+
+      checkBtn.disabled = true;
       summaryElem.textContent = 'Checking URLs...';
+      resultsContainer.style.display = 'none';
       document.body.classList.add('loading');
 
-      const promises = urls.map(checkUrl);
+      const promises = urls.map(url => checkUrl(url.trim()));
       const results = await Promise.allSettled(promises);
 
       const fulfilledResults = results
         .filter(r => r.status === 'fulfilled')
         .map(r => r.value);
+
+      lastResults = fulfilledResults;
 
       // Count statuses
       const activeCount = fulfilledResults.filter(r => r.statusLabel === 'Active').length;
@@ -160,12 +192,11 @@
 
       // Update summary
       summaryElem.textContent = 
-        `Active: ${activeCount}, Redirected: ${redirectedCount}, Non-active: ${nonActiveCount}, Total: ${fulfilledResults.length}`;
+        `Check complete! Found ${activeCount} active, ${redirectedCount} redirected, ${nonActiveCount} non-active out of ${fulfilledResults.length}.`;
 
       // Render results
       resultsElem.innerHTML = fulfilledResults.map(r => `
         <tr>
-          <td>${r.name}</td>
           <td>
             <a href="${r.url}" target="_blank">${r.url}</a>
             ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
@@ -175,11 +206,46 @@
         </tr>
       `).join('');
 
+      resultsContainer.style.display = 'block';
       document.body.classList.remove('loading');
+      checkBtn.disabled = false;
     }
 
-    // Run on page load
-    checkUrls();
+    // Export results as CSV
+    function exportToCsv() {
+      if (lastResults.length === 0) return;
+
+      const headers = ['URL', 'Status', 'Details'];
+      const rows = lastResults.map(r => [
+        r.url,
+        r.statusLabel,
+        r.statusInfo.replace(/,/g, ';') // avoid breaking CSV with commas
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(field => `"${field}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'url_status_results.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Event listeners
+    checkBtn.addEventListener('click', checkUrls);
+    exportBtn.addEventListener('click', exportToCsv);
+
+    // Optional: auto-check if URLs are pre-filled
+    if (urlsTextarea.value.trim()) {
+      checkUrls();
+    }
   </script>
 </body>
 </html>
