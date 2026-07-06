@@ -1,1 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Status Monitor</title>
+  <style>
+    :root {
+      --pink-soft: #ffd6e7;
+      --pink-medium: #ff85b3;
+      --pink-dark: #e75480;
+      --text-dark: #5a3a4a;
+      --text-light: #fff;
+      --shadow: rgba(0, 0, 0, 0.05);
+    }
 
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #ffe6f2 0%, #ffcce6 100%);
+      color: var(--text-dark);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: var(--pink-dark);
+      margin: 0;
+      text-shadow: 1px 1px 2px var(--shadow);
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--pink-medium);
+      margin-top: 5px;
+    }
+
+    .summary {
+      background: rgba(255, 255, 255, 0.8);
+      padding: 15px 20px;
+      border-radius: 12px;
+      margin-bottom: 25px;
+      text-align: center;
+      font-size: 1.1rem;
+      color: var(--pink-dark);
+      box-shadow: 0 2px 8px var(--shadow);
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    .table-wrapper {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px var(--shadow);
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: var(--pink-soft);
+      color: var(--pink-dark);
+      padding: 16px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--pink-medium);
+    }
+
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background: rgba(255, 214, 231, 0.3);
+    }
+
+    .status-active {
+      color: #4caf50;
+      font-weight: 600;
+    }
+
+    .status-redirected {
+      color: #ff9800;
+      font-weight: 600;
+    }
+
+    .status-non-active {
+      color: #f44336;
+      font-weight: 600;
+    }
+
+    .redirect-url {
+      font-size: 0.85em;
+      color: var(--pink-medium);
+      margin-top: 2px;
+    }
+
+    a {
+      color: var(--pink-dark);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.9rem;
+      color: var(--pink-medium);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>API Status Monitor</h1>
+      <div class="subtitle">Keeping an eye on your endpoints 💖</div>
+    </header>
+
+    <div class="summary" id="summary">Checking URLs...</div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Info</th>
+          </tr>
+        </thead>
+        <tbody id="results">
+          <!-- Results will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      Made with 💕
+    </footer>
+  </div>
+
+  <script>
+    // Configuration
+    const urls = [
+      { name: 'Example API', url: 'https://httpbin.org/status/200' },
+      { name: 'Example Redirect', url: 'https://httpbin.org/redirect-to?url=https://httpbin.org/status/200' },
+      { name: 'Example 404', url: 'https://httpbin.org/status/404' },
+      { name: 'Example Error', url: 'https://invalid.example' },
+      // Add your own URLs here
+    ];
+
+    const proxyUrl = 'https://corsproxy.io/?';
+    const timeoutMs = 10000;
+
+    // Check a single URL
+    async function checkUrl(urlObj) {
+      const { name, url } = urlObj;
+      const proxyFullUrl = proxyUrl + encodeURIComponent(url);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const response = await fetch(proxyFullUrl, {
+          signal: controller.signal,
+          redirect: 'follow'
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const finalUrl = response.url;
+          let statusLabel = 'Active';
+          let statusInfo = '';
+
+          // Detect redirect
+          if (finalUrl !== proxyFullUrl) {
+            statusLabel = 'Redirected';
+            statusInfo += '| Redirected';
+          }
+
+          return {
+            name,
+            url,
+            finalUrl,
+            statusLabel,
+            statusInfo,
+            ok: true
+          };
+        } else {
+          return {
+            name,
+            url,
+            statusLabel: 'Non-active',
+            statusInfo: `HTTP ${response.status}`,
+            ok: false
+          };
+        }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        return {
+          name,
+          url,
+          statusLabel: 'Non-active',
+          statusInfo: error.message,
+          ok: false
+        };
+      }
+    }
+
+    // Check all URLs and update the table
+    async function checkUrls() {
+      const resultsElem = document.getElementById('results');
+      const summaryElem = document.getElementById('summary');
+      resultsElem.innerHTML = '';
+      summaryElem.textContent = 'Checking URLs...';
+      document.body.classList.add('loading');
+      summaryElem.classList.add('pulse');
+
+      const promises = urls.map(checkUrl);
+      const results = await Promise.allSettled(promises);
+
+      const fulfilledResults = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      // Count statuses
+      const activeCount = fulfilledResults.filter(r => r.statusLabel === 'Active').length;
+      const redirectedCount = fulfilledResults.filter(r => r.statusLabel === 'Redirected').length;
+      const nonActiveCount = fulfilledResults.filter(r => r.statusLabel === 'Non-active').length;
+
+      // Update summary
+      summaryElem.textContent = 
+        `Active: ${activeCount}, Redirected: ${redirectedCount}, Non-active: ${nonActiveCount}, Total: ${fulfilledResults.length}`;
+
+      // Render results
+      resultsElem.innerHTML = fulfilledResults.map(r => `
+        <tr>
+          <td>${r.name}</td>
+          <td>
+            <a href="${r.url}" target="_blank">${r.url}</a>
+            ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
+          </td>
+          <td class="status-${r.statusLabel.toLowerCase().replace('/', '-')}">${r.statusLabel}</td>
+          <td>${r.statusInfo}</td>
+        </tr>
+      `).join('');
+
+      document.body.classList.remove('loading');
+      summaryElem.classList.remove('pulse');
+    }
+
+    // Run on page load
+    checkUrls();
+  </script>
+</body>
+</html>
