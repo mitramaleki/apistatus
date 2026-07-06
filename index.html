@@ -333,9 +333,10 @@ https://another.example"></textarea><br>
       const parkedCount = fulfilledResults.filter(r => r.statusLabel === 'Parked').length;
       const nonActiveCount = fulfilledResults.filter(r => r.statusLabel === 'Non-active').length;
 
-      // Update summary
-      summaryElem.textContent =
-        `Check complete! Found ${activeCount} active, ${redirectedCount} redirected, ${parkedCount} parked, ${nonActiveCount} non-active out of ${fulfilledResults.length}.`;
+      // Update summary: show counts as "X/Y done"
+      const total = fulfilledResults.length;
+      const doneCount = activeCount + redirectedCount + parkedCount + nonActiveCount;
+      summaryElem.textContent = `${doneCount}/${total} done`;
 
       // Render results
       resultsElem.innerHTML = fulfilledResults.map(r => `
