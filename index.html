@@ -6,105 +6,134 @@
     <title>URL Status Checker</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
+            color: #333;
         }
         h1 {
-            color: #333;
+            color: #2c3e50;
             text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1.1em;
         }
         textarea {
             width: 100%;
             height: 150px;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 6px;
             font-family: monospace;
             resize: vertical;
             box-sizing: border-box;
+            font-size: 14px;
+            background-color: #fff;
         }
         button {
-            background-color: #007bff;
+            background-color: #3498db;
             color: white;
-            padding: 12px 24px;
+            padding: 14px 24px;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
             width: 100%;
             margin: 10px 0;
+            transition: background-color 0.2s;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #2980b9;
         }
         button:disabled {
-            background-color: #ccc;
+            background-color: #bdc3c7;
             cursor: not-allowed;
         }
         #progress {
-            margin: 15px 0;
-            padding: 10px;
-            background-color: #e9ecef;
-            border-radius: 4px;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 6px;
             min-height: 20px;
+            text-align: center;
         }
         #results {
-            margin-top: 20px;
-            padding: 15px;
+            margin-top: 25px;
+            padding: 20px;
             background-color: white;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 15px;
         }
         th, td {
-            padding: 12px;
+            padding: 14px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #e0e0e0;
         }
         th {
-            background-color: #f8f9fa;
+            background-color: #f1f2f6;
+            font-weight: 600;
+            color: #2c3e50;
         }
         tr:hover {
-            background-color: #f1f1f1;
+            background-color: #f8f9fa;
         }
         .status-active {
-            color: #28a745;
+            color: #27ae60;
             font-weight: bold;
         }
         .status-non-active {
-            color: #dc3545;
+            color: #e74c3c;
             font-weight: bold;
         }
         .download-btn {
             display: inline-block;
-            margin-top: 15px;
-            padding: 10px 20px;
-            background-color: #28a745;
+            margin-top: 20px;
+            padding: 12px 24px;
+            background-color: #27ae60;
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 6px;
             font-weight: bold;
+            transition: background-color 0.2s;
         }
         .download-btn:hover {
-            background-color: #218838;
+            background-color: #219653;
         }
         .loading {
             text-align: center;
-            color: #666;
+            color: #7f8c8d;
             font-style: italic;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <h1>URL Status Checker</h1>
-    <p>Enter URLs (one per line) to check their status. The tool will check if each URL is active (returns any HTTP response) or non-active.</p>
+    <p class="subtitle">Enter URLs (one per line) to check if they're active (HTTP 2xx) or non‑active.</p>
     <textarea id="urlInput" placeholder="Enter one URL per line&#10;example.com&#10;google.com&#10;github.com"></textarea>
     <button id="checkBtn">Check URLs</button>
     <div id="progress" class="loading"></div>
@@ -127,6 +156,7 @@
 
             const urls = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
             checkBtn.disabled = true;
+            checkBtn.innerHTML = '<span class="spinner"></span> Checking...';
             progressDiv.innerHTML = '<div class="loading">Starting check...</div>';
             resultsDiv.innerHTML = '';
 
@@ -162,6 +192,7 @@
             }
 
             checkBtn.disabled = false;
+            checkBtn.textContent = 'Check URLs';
             progressDiv.innerHTML = `<div class="loading">Check complete! Found ${activeCount} active URLs out of ${urls.length}.</div>`;
 
             if (results.length > 0) {
