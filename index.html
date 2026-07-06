@@ -32,15 +32,12 @@
       background: #ccc;
       cursor: not-allowed;
     }
-    .summary {
-      margin: 20px 0;
-      font-size: 1.1em;
-    }
     table {
       width: 100%;
       border-collapse: collapse;
       background: white;
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-top: 20px;
     }
     th, td {
       padding: 12px;
@@ -67,6 +64,10 @@
       color: #666;
       margin-top: 2px;
     }
+    .summary {
+      margin: 20px 0;
+      font-size: 1.1em;
+    }
     .loading {
       opacity: 0.5;
     }
@@ -75,42 +76,26 @@
 <body>
   <h1>URL Status Checker</h1>
   <p>Enter URLs (one per line) to check if they're active (HTTP 2xx) or non‑active.</p>
-  <textarea id="urls" placeholder="http://example.com
-https://another.example"></textarea>
-  <br>
+  <textarea id="urlsInput" placeholder="http://example.com&#10;https://another.example"></textarea><br>
   <button id="checkBtn">Check URLs</button>
   <div class="summary" id="summary"></div>
-  <div id="resultsContainer" style="display: none;">
-    <table>
-      <thead>
-        <tr>
-          <th>URL</th>
-          <th>Status</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody id="results">
-        <!-- Results will be inserted here -->
-      </tbody>
-    </table>
-    <br>
-    <button id="exportBtn">Download Results as CSV</button>
-  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>URL</th>
+        <th>Status</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody id="results">
+      <!-- Results will be inserted here -->
+    </tbody>
+  </table>
+  <button id="exportBtn" style="display:none;">Download Results as CSV</button>
 
   <script>
-    // Configuration
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
-
-    // DOM elements
-    const urlsTextarea = document.getElementById('urls');
-    const checkBtn = document.getElementById('checkBtn');
-    const summaryElem = document.getElementById('summary');
-    const resultsContainer = document.getElementById('resultsContainer');
-    const resultsElem = document.getElementById('results');
-    const exportBtn = document.getElementById('exportBtn');
-
-    let lastResults = [];
 
     // Check a single URL
     async function checkUrl(url) {
@@ -129,10 +114,10 @@ https://another.example"></textarea>
         if (response.ok) {
           const finalUrl = response.url;
           let statusLabel = 'Active';
-          let statusInfo = `HTTP ${response.status}`;
+          let statusInfo = 'HTTP ' + response.status;
 
           // Detect redirect
-          if (finalUrl !== proxyFullUrl) {
+          if (finalUrl && finalUrl !== proxyFullUrl) {
             statusLabel = 'Redirected';
             statusInfo += ' | Redirected';
           }
@@ -148,7 +133,7 @@ https://another.example"></textarea>
           return {
             url,
             statusLabel: 'Non-active',
-            statusInfo: `HTTP ${response.status}`,
+            statusInfo: 'HTTP ' + response.status,
             ok: false
           };
         }
@@ -165,25 +150,27 @@ https://another.example"></textarea>
 
     // Check all URLs and update the table
     async function checkUrls() {
-      const urls = urlsTextarea.value.trim().split('\n').filter(u => u.trim());
-      if (urls.length === 0) {
-        summaryElem.textContent = 'Please enter at least one URL.';
-        return;
-      }
+      const urlsInput = document.getElementById('urlsInput').value.trim();
+      if (!urlsInput) return;
 
-      checkBtn.disabled = true;
+      const urls = urlsInput.split('\n').map(s => s.trim()).filter(Boolean);
+      const resultsElem = document.getElementById('results');
+      const summaryElem = document.getElementById('summary');
+      const checkBtn = document.getElementById('checkBtn');
+      const exportBtn = document.getElementById('exportBtn');
+
+      resultsElem.innerHTML = '';
       summaryElem.textContent = 'Checking URLs...';
-      resultsContainer.style.display = 'none';
+      checkBtn.disabled = true;
+      exportBtn.style.display = 'none';
       document.body.classList.add('loading');
 
-      const promises = urls.map(url => checkUrl(url.trim()));
+      const promises = urls.map(url => checkUrl(url));
       const results = await Promise.allSettled(promises);
 
       const fulfilledResults = results
         .filter(r => r.status === 'fulfilled')
         .map(r => r.value);
-
-      lastResults = fulfilledResults;
 
       // Count statuses
       const activeCount = fulfilledResults.filter(r => r.statusLabel === 'Active').length;
@@ -206,30 +193,29 @@ https://another.example"></textarea>
         </tr>
       `).join('');
 
-      resultsContainer.style.display = 'block';
-      document.body.classList.remove('loading');
+      // Enable CSV export
+      exportBtn.style.display = 'inline-block';
+      exportBtn.onclick = () => exportToCsv(fulfilledResults);
+
       checkBtn.disabled = false;
+      document.body.classList.remove('loading');
     }
 
     // Export results as CSV
-    function exportToCsv() {
-      if (lastResults.length === 0) return;
-
+    function exportToCsv(results) {
       const headers = ['URL', 'Status', 'Details'];
-      const rows = lastResults.map(r => [
-        r.url,
-        r.statusLabel,
-        r.statusInfo.replace(/,/g, ';') // avoid breaking CSV with commas
-      ]);
-
       const csvContent = [
         headers.join(','),
-        ...rows.map(row => row.map(field => `"${field}"`).join(','))
+        ...results.map(r => [
+          `"${r.url.replace(/"/g, '""')}"`,
+          `"${r.statusLabel}"`,
+          `"${r.statusInfo.replace(/"/g, '""')}"`
+        ].join(','))
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
       link.setAttribute('download', 'url_status_results.csv');
       link.style.visibility = 'hidden';
@@ -239,13 +225,7 @@ https://another.example"></textarea>
     }
 
     // Event listeners
-    checkBtn.addEventListener('click', checkUrls);
-    exportBtn.addEventListener('click', exportToCsv);
-
-    // Optional: auto-check if URLs are pre-filled
-    if (urlsTextarea.value.trim()) {
-      checkUrls();
-    }
+    document.getElementById('checkBtn').addEventListener('click', checkUrls);
   </script>
 </body>
 </html>
