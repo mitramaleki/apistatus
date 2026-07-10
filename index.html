@@ -217,6 +217,7 @@ https://another.example"></textarea><br>
     </div>
 
     <button id="exportBtn" style="display:none;">Download Results as CSV</button>
+    <button id="continueBtn" style="display:none;">Continue to Page 2</button>
 
     <footer>
       Created by Mitra 🐤
@@ -287,11 +288,13 @@ https://another.example"></textarea><br>
       const summaryElem = document.getElementById('summary');
       const checkBtn = document.getElementById('checkBtn');
       const exportBtn = document.getElementById('exportBtn');
+      const continueBtn = document.getElementById('continueBtn');
 
       resultsElem.innerHTML = '';
       summaryElem.textContent = 'Checking URLs...';
       checkBtn.disabled = true;
       exportBtn.style.display = 'none';
+      continueBtn.style.display = 'none';
       document.body.classList.add('loading');
       summaryElem.classList.add('pulse');
 
@@ -319,9 +322,12 @@ https://another.example"></textarea><br>
         </tr>
       `).join('');
 
-      // Enable CSV export
+      // Enable CSV export and continue button
       exportBtn.style.display = 'inline-block';
       exportBtn.onclick = () => exportToCsv(fulfilledResults);
+
+      continueBtn.style.display = 'inline-block';
+      continueBtn.onclick = () => continueToPage2(fulfilledResults);
 
       checkBtn.disabled = false;
       document.body.classList.remove('loading');
@@ -349,6 +355,25 @@ https://another.example"></textarea><br>
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    // Continue to Page 2
+    function continueToPage2(results) {
+      const headers = ['URL', 'Status', 'Details'];
+      const csvContent = [
+        headers.join(','),
+        ...results.map(r => [
+          `"${r.url.replace(/"/g, '""')}"`,
+          `"${r.statusLabel}"`,
+          `"${r.statusInfo.replace(/"/g, '""')}"`
+        ].join(','))
+      ].join('\n');
+
+      // Store CSV in localStorage for Page 2 to read
+      localStorage.setItem('urlStatusResults', csvContent);
+
+      // Redirect to Page 2
+      window.location.href = 'page2.html';
     }
 
     // Event listeners
