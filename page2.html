@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Deep Search & Update</title>
+  <style>
+    :root {
+      --pink-soft: #ffd6e7;
+      --pink-medium: #ff85b3;
+      --pink-dark: #e75480;
+      --text-dark: #5a3a4a;
+      --text-light: #fff;
+      --shadow: rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #ffe6f2 0%, #ffcce6 100%);
+      color: var(--text-dark);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: var(--pink-dark);
+      margin: 0;
+      text-shadow: 1px 1px 2px var(--shadow);
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--pink-medium);
+      margin-top: 5px;
+    }
+
+    .filters {
+      background: rgba(255, 255, 255, 0.8);
+      padding: 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+      box-shadow: 0 2px 8px var(--shadow);
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    .filter-group {
+      margin-bottom: 15px;
+    }
+
+    .filter-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: var(--pink-dark);
+    }
+
+    .filter-group input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 133, 179, 0.3);
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .filter-group input[type="text"]:focus {
+      outline: none;
+      border-color: var(--pink-medium);
+      box-shadow: 0 0 0 2px rgba(255, 133, 179, 0.2);
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .radio-option input {
+      margin: 0;
+    }
+
+    button {
+      margin: 10px 0;
+      padding: 10px 20px;
+      background: var(--pink-medium);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--pink-dark);
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .summary {
+      background: rgba(255, 255, 255, 0.8);
+      padding: 15px 20px;
+      border-radius: 12px;
+      margin: 20px 0;
+      text-align: center;
+      font-size: 1.1rem;
+      color: var(--pink-dark);
+      box-shadow: 0 2px 8px var(--shadow);
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    .table-wrapper {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px var(--shadow);
+      border: 1px solid rgba(255, 133, 179, 0.2);
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      background: var(--pink-soft);
+      color: var(--pink-dark);
+      padding: 16px 12px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--pink-medium);
+    }
+
+    td {
+      padding: 14px 12px;
+      border-bottom: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover {
+      background: rgba(255, 214, 231, 0.3);
+    }
+
+    .status-active {
+      color: #4caf50;
+      font-weight: 600;
+    }
+
+    .status-non-active {
+      color: #f44336;
+      font-weight: 600;
+    }
+
+    .status-merged {
+      color: #ff9800;
+      font-weight: 600;
+    }
+
+    .status-other {
+      color: #9c27b0;
+      font-weight: 600;
+    }
+
+    .redirect-url {
+      font-size: 0.85em;
+      color: var(--pink-medium);
+      margin-top: 2px;
+    }
+
+    a {
+      color: var(--pink-dark);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 0.9rem;
+      color: var(--pink-medium);
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>URL Deep Search & Update</h1>
+      <div class="subtitle">Check non‑active URLs and update status with web search 💖</div>
+    </header>
+
+    <div class="filters">
+      <div class="filter-group">
+        <label>Company type</label>
+        <div class="radio-group">
+          <label class="radio-option">
+            <input type="radio" name="companyType" value="Headhunter" checked>
+            Headhunter
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="companyType" value="Normal">
+            Normal
+          </label>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label for="countryRegion">Country/region (free text)</label>
+        <input type="text" id="countryRegion" placeholder="USA, Germany, Berlin, etc.">
+      </div>
+    </div>
+
+    <div class="summary" id="summary">
+      Loaded <span id="totalCount">0</span> entries from Page 1.
+      <span id="nonActiveCount">0</span> are non‑active and will be searched.
+    </div>
+
+    <button id="runBtn">Run Deep Search</button>
+    <button id="downloadBtn" class="hidden">Download Full Updated List (CSV)</button>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Old URL</th>
+            <th>Status (from Page 1)</th>
+            <th>New Status</th>
+            <th>New URL</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="results">
+          <!-- Results will be inserted here -->
+        </tbody>
+      </table>
+    </div>
+
+    <footer>
+      Created by Mitra 🐤
+    </footer>
+  </div>
+
+  <script>
+    // ===========================
+    // Data from Page 1
+    // ===========================
+
+    // Example: read CSV from URL param or localStorage
+    // For now, we'll simulate it with a small example
+    const exampleCsv = `URL,Status,Details
+http://www.coastwide-global.com/,Non-active,HTTP 404
+https://www.cybercoders.com/,Active,HTTP 200
+http://www.jobcreationafrica.webs.com/,Non-active,HTTP 404`;
+
+    function parseCsv(csvText) {
+      const lines = csvText.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      const data = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const entry = {};
+        headers.forEach((h, idx) => {
+          entry[h.toLowerCase()] = values[idx] || '';
+        });
+        data.push(entry);
+      }
+      return data;
+    }
+
+    function inferNameFromUrl(url) {
+      try {
+        const hostname = new URL(url).hostname;
+        return hostname.replace(/^www\./, '').split('.')[0].replace(/-/g, ' ');
+      } catch {
+        return url.split('/').pop() || url;
+      }
+    }
+
+    let allEntries = [];
+    let nonActiveEntries = [];
+
+    function loadDataFromPage1() {
+      // In a real implementation, you'd get this from:
+      // - URL query param (e.g., ?data=...)
+      // - localStorage (e.g., localStorage.getItem('urlStatusResults'))
+      // For now, we use the example CSV
+      const csvData = parseCsv(exampleCsv);
+
+      allEntries = csvData.map(row => {
+        const name = inferNameFromUrl(row.url);
+        return {
+          name,
+          old_url: row.url,
+          status_from_check: row.status,
+          details: row.details || ''
+        };
+      });
+
+      nonActiveEntries = allEntries.filter(e => e.status_from_check.toLowerCase().includes('non-active'));
+
+      updateSummary();
+      renderInitialTable();
+    }
+
+    function updateSummary() {
+      document.getElementById('totalCount').textContent = allEntries.length;
+      document.getElementById('nonActiveCount').textContent = nonActiveEntries.length;
+    }
+
+    function renderInitialTable() {
+      const tbody = document.getElementById('results');
+      tbody.innerHTML = allEntries.map(e => `
+        <tr>
+          <td>${e.name}</td>
+          <td><a href="${e.old_url}" target="_blank">${e.old_url}</a></td>
+          <td class="status-${e.status_from_check.toLowerCase().replace('/', '-')}">${e.status_from_check}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>-</td>
+        </tr>
+      `).join('');
+    }
+
+    // ===========================
+    // Run Deep Search (to Namazu)
+    // ===========================
+
+    async function runDeepSearch() {
+      const companyType = document.querySelector('input[name="companyType"]:checked').value;
+      const countryRegion = document.getElementById('countryRegion').value.trim();
+      if (!countryRegion) {
+        alert('Please enter a country/region.');
+        return;
+      }
+
+      const runBtn = document.getElementById('runBtn');
+      const downloadBtn = document.getElementById('downloadBtn');
+      const summaryElem = document.getElementById('summary');
+
+      runBtn.disabled = true;
+      downloadBtn.classList.add('hidden');
+      document.body.classList.add('loading');
+      summaryElem.textContent = 'Running deep search...';
+      summaryElem.classList.add('pulse');
+
+      // In a real implementation, you'd send this to your backend,
+      // which then calls Namazu (me) with web search tools.
+      // For now, we simulate a small result set.
+      const simulatedResults = [
+        {
+          name: 'Coastwide Global',
+          old_url: 'http://www.coastwide-global.com/',
+          status: 'ACTIVE',
+          new_url: 'https://coastwideglobal.net/',
+          notes: 'Company still active under new domain.'
+        },
+        {
+          name: 'Job Creation Program For Africa',
+          old_url: 'http://www.jobcreationafrica.webs.com/',
+          status: 'NOT ACTIVE / DEFUNCT',
+          new_url: '',
+          notes: 'No trace as a staffing/recruiting firm.'
+        }
+      ];
+
+      // Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Merge results into allEntries
+      const updatedEntries = allEntries.map(entry => {
+        const match = simulatedResults.find(r => r.name === entry.name);
+        if (match) {
+          return {
+            ...entry,
+            status: match.status,
+            new_url: match.new_url,
+            notes: match.notes
+          };
+        }
+        // Keep active entries as-is
+        if (entry.status_from_check.toLowerCase().includes('active')) {
+          return {
+            ...entry,
+            status: 'Active',
+            new_url: entry.old_url,
+            notes: ''
+          };
+        }
+        // If not processed and not active, mark as unknown
+        return {
+          ...entry,
+          status: 'UNKNOWN',
+          new_url: '',
+          notes: 'Not processed'
+        };
+      });
+
+      // Update UI
+      renderUpdatedTable(updatedEntries);
+      enableDownload(updatedEntries);
+
+      runBtn.disabled = false;
+      document.body.classList.remove('loading');
+      summaryElem.classList.remove('pulse');
+      summaryElem.textContent = `Deep search complete. ${nonActiveEntries.length} non‑active entries processed.`;
+    }
+
+    function renderUpdatedTable(entries) {
+      const tbody = document.getElementById('results');
+      tbody.innerHTML = entries.map(e => `
+        <tr>
+          <td>${e.name}</td>
+          <td><a href="${e.old_url}" target="_blank">${e.old_url}</a></td>
+          <td class="status-${e.status_from_check.toLowerCase().replace('/', '-')}">${e.status_from_check}</td>
+          <td class="status-${e.status.toLowerCase().replace('/', '-')}">${e.status}</td>
+          <td>${e.new_url ? `<a href="${e.new_url}" target="_blank">${e.new_url}</a>` : '-'}</td>
+          <td>${e.notes || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function enableDownload(entries) {
+      const downloadBtn = document.getElementById('downloadBtn');
+      downloadBtn.classList.remove('hidden');
+      downloadBtn.onclick = () => exportToCsv(entries);
+    }
+
+    function exportToCsv(entries) {
+      const headers = ['name', 'old_url', 'status', 'new_url', 'notes'];
+      const csvContent = [
+        headers.join(','),
+        ...entries.map(e => [
+          `"${(e.name || '').replace(/"/g, '""')}"`,
+          `"${(e.old_url || '').replace(/"/g, '""')}"`,
+          `"${(e.status || '').replace(/"/g, '""')}"`,
+          `"${(e.new_url || '').replace(/"/g, '""')}"`,
+          `"${(e.notes || '').replace(/"/g, '""')}"`
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'updated_url_list.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ===========================
+    // Initialization
+    // ===========================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDataFromPage1();
+      document.getElementById('runBtn').addEventListener('click', runDeepSearch);
+    });
+  </script>
+</body>
+</html>
