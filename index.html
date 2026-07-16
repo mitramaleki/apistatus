@@ -186,6 +186,70 @@
       font-size: 0.9rem;
       color: var(--pink-medium);
     }
+
+    /* Progress bar styles */
+    .progress-container {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 8px;
+      margin: 10px 0;
+      overflow: hidden;
+      height: 8px;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--pink-soft), var(--pink-medium));
+      border-radius: 8px;
+      transition: width 0.3s ease;
+    }
+
+    .status-message {
+      font-size: 0.9rem;
+      color: var(--pink-medium);
+      margin-top: 5px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 10px 0;
+    }
+
+    .controls button {
+      margin: 0;
+    }
+
+    .delay-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 8px 15px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    .delay-control label {
+      font-size: 0.9rem;
+      color: var(--text-dark);
+    }
+
+    .delay-control input {
+      width: 80px;
+      padding: 4px 8px;
+      border: 1px solid rgba(255, 133, 179, 0.3);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .delay-control input:focus {
+      outline: none;
+      border-color: var(--pink-medium);
+    }
   </style>
 </head>
 <body>
@@ -197,9 +261,20 @@
 
     <textarea id="urlsInput" placeholder="http://example.com
 https://another.example"></textarea><br>
-    <button id="checkBtn">Check URLs</button>
+
+    <div class="controls">
+      <button id="checkBtn">Check URLs</button>
+      <div class="delay-control">
+        <label for="delayInput">Delay (ms):</label>
+        <input type="number" id="delayInput" value="200" min="50" max="5000">
+      </div>
+    </div>
 
     <div class="summary" id="summary"></div>
+    <div class="progress-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div class="status-message" id="statusMessage"></div>
 
     <div class="table-wrapper">
       <table>
@@ -227,6 +302,53 @@ https://another.example"></textarea><br>
   <script>
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 10000;
+
+    // Check a single URL with retry logic
+    async function checkUrlWithRetry(url, maxRetries = 3) {
+      let lastError;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          // If this is a retry, wait longer
+          if (attempt > 0) {
+            const waitTime = 2000 * Math.pow(2, attempt - 1);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+          
+          const result = await checkUrl(url);
+          
+          // If we got a rate limit response, throw to trigger retry
+          if (result.statusInfo.includes('429')) {
+            throw new Error('Rate limited (429)');
+          }
+          
+          return result;
+        } catch (error) {
+          lastError = error;
+          
+          // If it's a rate limit or abort error, we'll retry
+          if (error.message.includes('429') || error.message.includes('aborted')) {
+            continue;
+          }
+          
+          // For other errors, return non-active
+          return {
+            url,
+            statusLabel: 'Non-active',
+            statusInfo: error.message,
+            ok: false
+          };
+        }
+      }
+      
+      // All retries failed
+      return {
+        url,
+        statusLabel: 'Non-active',
+        statusInfo: lastError?.message || 'Failed after retries',
+        ok: false
+      };
+    }
 
     // Check a single URL
     async function checkUrl(url) {
@@ -278,7 +400,7 @@ https://another.example"></textarea><br>
       }
     }
 
-    // Check all URLs and update the table
+    // Check all URLs with delay between requests
     async function checkUrls() {
       const urlsInput = document.getElementById('urlsInput').value.trim();
       if (!urlsInput) return;
@@ -286,48 +408,83 @@ https://another.example"></textarea><br>
       const urls = urlsInput.split('\n').map(s => s.trim()).filter(Boolean);
       const resultsElem = document.getElementById('results');
       const summaryElem = document.getElementById('summary');
+      const progressBar = document.getElementById('progressBar');
+      const statusMessage = document.getElementById('statusMessage');
       const checkBtn = document.getElementById('checkBtn');
       const exportBtn = document.getElementById('exportBtn');
       const continueBtn = document.getElementById('continueBtn');
+      const delayInput = document.getElementById('delayInput');
+
+      // Get delay value
+      const delayMs = parseInt(delayInput.value) || 200;
 
       resultsElem.innerHTML = '';
       summaryElem.textContent = 'Checking URLs...';
+      progressBar.style.width = '0%';
+      statusMessage.textContent = 'Starting...';
       checkBtn.disabled = true;
       exportBtn.style.display = 'none';
       continueBtn.style.display = 'none';
       document.body.classList.add('loading');
       summaryElem.classList.add('pulse');
 
-      const promises = urls.map(url => checkUrl(url));
-      const results = await Promise.allSettled(promises);
+      const results = [];
+      const total = urls.length;
+      
+      // Use batch processing with delays
+      const batchSize = 10; // Process 10 URLs at a time
+      
+      for (let i = 0; i < total; i += batchSize) {
+        const batch = urls.slice(i, Math.min(i + batchSize, total));
+        const batchPromises = batch.map(async (url, index) => {
+          // Stagger requests within the batch
+          const staggerDelay = index * 50; // 50ms stagger within batch
+          await new Promise(resolve => setTimeout(resolve, staggerDelay));
+          
+          const result = await checkUrlWithRetry(url);
+          results.push(result);
+          
+          // Update progress
+          const done = results.length;
+          const percentage = Math.round((done / total) * 100);
+          progressBar.style.width = percentage + '%';
+          summaryElem.textContent = `${done}/${total} done`;
+          statusMessage.textContent = `Checking: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`;
+          
+          // Render results incrementally
+          const resultRow = `
+            <tr>
+              <td>
+                <a href="${result.url}" target="_blank">${result.url}</a>
+                ${result.finalUrl && result.finalUrl !== result.url ? `<div class="redirect-url">→ ${result.finalUrl}</div>` : ''}
+              </td>
+              <td class="status-${result.statusLabel.toLowerCase().replace('/', '-')}">${result.statusLabel}</td>
+              <td>${result.statusInfo}</td>
+            </tr>
+          `;
+          resultsElem.insertAdjacentHTML('beforeend', resultRow);
+        });
+        
+        // Wait for the current batch to complete
+        await Promise.all(batchPromises);
+        
+        // Add a delay between batches (but not after the last batch)
+        if (i + batchSize < total) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
 
-      const fulfilledResults = results
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value);
-
-      const total = fulfilledResults.length;
-
-      // Update summary: just "X/X done"
+      // All done
       summaryElem.textContent = `${total}/${total} done`;
-
-      // Render results
-      resultsElem.innerHTML = fulfilledResults.map(r => `
-        <tr>
-          <td>
-            <a href="${r.url}" target="_blank">${r.url}</a>
-            ${r.finalUrl && r.finalUrl !== r.url ? `<div class="redirect-url">→ ${r.finalUrl}</div>` : ''}
-          </td>
-          <td class="status-${r.statusLabel.toLowerCase().replace('/', '-')}">${r.statusLabel}</td>
-          <td>${r.statusInfo}</td>
-        </tr>
-      `).join('');
+      progressBar.style.width = '100%';
+      statusMessage.textContent = '✅ Complete! All URLs checked.';
 
       // Enable CSV export and continue button
       exportBtn.style.display = 'inline-block';
-      exportBtn.onclick = () => exportToCsv(fulfilledResults);
+      exportBtn.onclick = () => exportToCsv(results);
 
       continueBtn.style.display = 'inline-block';
-      continueBtn.onclick = () => continueToPage2(fulfilledResults);
+      continueBtn.onclick = () => continueToPage2(results);
 
       checkBtn.disabled = false;
       document.body.classList.remove('loading');
@@ -342,7 +499,7 @@ https://another.example"></textarea><br>
         ...results.map(r => [
           `"${r.url.replace(/"/g, '""')}"`,
           `"${r.statusLabel}"`,
-          `"${r.statusInfo.replace(/"/g, '""')}"`
+          `"${r.statusInfo ? r.statusInfo.replace(/"/g, '""') : ''}"`
         ].join(','))
       ].join('\n');
 
@@ -365,7 +522,7 @@ https://another.example"></textarea><br>
         ...results.map(r => [
           `"${r.url.replace(/"/g, '""')}"`,
           `"${r.statusLabel}"`,
-          `"${r.statusInfo.replace(/"/g, '""')}"`
+          `"${r.statusInfo ? r.statusInfo.replace(/"/g, '""') : ''}"`
         ].join(','))
       ].join('\n');
 
@@ -378,6 +535,14 @@ https://another.example"></textarea><br>
 
     // Event listeners
     document.getElementById('checkBtn').addEventListener('click', checkUrls);
+    
+    // Enter key support for textarea (Ctrl+Enter to check)
+    document.getElementById('urlsInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        document.getElementById('checkBtn').click();
+      }
+    });
   </script>
 </body>
 </html>
