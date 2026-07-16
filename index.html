@@ -187,7 +187,6 @@
       color: var(--pink-medium);
     }
 
-    /* Progress bar styles */
     .progress-container {
       width: 100%;
       background: rgba(255, 255, 255, 0.8);
@@ -266,7 +265,7 @@ https://another.example"></textarea><br>
       <button id="checkBtn">Check URLs</button>
       <div class="delay-control">
         <label for="delayInput">Delay (ms):</label>
-        <input type="number" id="delayInput" value="200" min="50" max="5000">
+        <input type="number" id="delayInput" value="500" min="100" max="10000">
       </div>
     </div>
 
@@ -301,7 +300,7 @@ https://another.example"></textarea><br>
 
   <script>
     const proxyUrl = 'https://corsproxy.io/?';
-    const timeoutMs = 10000;
+    const timeoutMs = 15000;
 
     // Check a single URL with retry logic
     async function checkUrlWithRetry(url, maxRetries = 3) {
@@ -309,25 +308,19 @@ https://another.example"></textarea><br>
       
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-          // If this is a retry, wait longer
+          // If this is a retry, wait longer with exponential backoff
           if (attempt > 0) {
-            const waitTime = 2000 * Math.pow(2, attempt - 1);
+            const waitTime = 3000 * Math.pow(2, attempt - 1);
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
           
           const result = await checkUrl(url);
-          
-          // If we got a rate limit response, throw to trigger retry
-          if (result.statusInfo.includes('429')) {
-            throw new Error('Rate limited (429)');
-          }
-          
           return result;
         } catch (error) {
           lastError = error;
           
           // If it's a rate limit or abort error, we'll retry
-          if (error.message.includes('429') || error.message.includes('aborted')) {
+          if (error.message.includes('429') || error.message.includes('aborted') || error.message.includes('Failed to fetch')) {
             continue;
           }
           
@@ -365,20 +358,10 @@ https://another.example"></textarea><br>
         clearTimeout(timeoutId);
 
         if (response.ok) {
-          const finalUrl = response.url;
-          let statusLabel = 'Active';
-          let statusInfo = 'HTTP ' + response.status;
-
-          // Show redirect info but keep status as Active
-          if (finalUrl && finalUrl !== url) {
-            statusInfo += ' | Redirected';
-          }
-
           return {
             url,
-            finalUrl,
-            statusLabel,
-            statusInfo,
+            statusLabel: 'Active',
+            statusInfo: 'HTTP ' + response.status,
             ok: true
           };
         } else {
@@ -391,12 +374,7 @@ https://another.example"></textarea><br>
         }
       } catch (error) {
         clearTimeout(timeoutId);
-        return {
-          url,
-          statusLabel: 'Non-active',
-          statusInfo: error.message,
-          ok: false
-        };
+        throw error; // Let retry logic handle it
       }
     }
 
@@ -415,8 +393,8 @@ https://another.example"></textarea><br>
       const continueBtn = document.getElementById('continueBtn');
       const delayInput = document.getElementById('delayInput');
 
-      // Get delay value
-      const delayMs = parseInt(delayInput.value) || 200;
+      // Get delay value (default 500ms)
+      const delayMs = parseInt(delayInput.value) || 500;
 
       resultsElem.innerHTML = '';
       summaryElem.textContent = 'Checking URLs...';
@@ -430,25 +408,27 @@ https://another.example"></textarea><br>
 
       const results = [];
       const total = urls.length;
+      let activeCount = 0;
+      let nonActiveCount = 0;
       
-      // Use batch processing with delays
-      const batchSize = 10; // Process 10 URLs at a time
-      
-      for (let i = 0; i < total; i += batchSize) {
-        const batch = urls.slice(i, Math.min(i + batchSize, total));
-        const batchPromises = batch.map(async (url, index) => {
-          // Stagger requests within the batch
-          const staggerDelay = index * 50; // 50ms stagger within batch
-          await new Promise(resolve => setTimeout(resolve, staggerDelay));
-          
+      for (let i = 0; i < total; i++) {
+        const url = urls[i];
+        
+        try {
           const result = await checkUrlWithRetry(url);
           results.push(result);
+          
+          if (result.statusLabel === 'Active') {
+            activeCount++;
+          } else {
+            nonActiveCount++;
+          }
           
           // Update progress
           const done = results.length;
           const percentage = Math.round((done / total) * 100);
           progressBar.style.width = percentage + '%';
-          summaryElem.textContent = `${done}/${total} done`;
+          summaryElem.textContent = `${done}/${total} done | Active: ${activeCount} | Non-active: ${nonActiveCount}`;
           statusMessage.textContent = `Checking: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`;
           
           // Render results incrementally
@@ -456,26 +436,31 @@ https://another.example"></textarea><br>
             <tr>
               <td>
                 <a href="${result.url}" target="_blank">${result.url}</a>
-                ${result.finalUrl && result.finalUrl !== result.url ? `<div class="redirect-url">→ ${result.finalUrl}</div>` : ''}
               </td>
               <td class="status-${result.statusLabel.toLowerCase().replace('/', '-')}">${result.statusLabel}</td>
               <td>${result.statusInfo}</td>
             </tr>
           `;
           resultsElem.insertAdjacentHTML('beforeend', resultRow);
-        });
-        
-        // Wait for the current batch to complete
-        await Promise.all(batchPromises);
-        
-        // Add a delay between batches (but not after the last batch)
-        if (i + batchSize < total) {
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+          
+          // Add delay between requests (but not after the last one)
+          if (i < total - 1) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+        } catch (error) {
+          // Handle unexpected errors
+          results.push({
+            url,
+            statusLabel: 'Non-active',
+            statusInfo: error.message || 'Unknown error',
+            ok: false
+          });
+          nonActiveCount++;
         }
       }
 
       // All done
-      summaryElem.textContent = `${total}/${total} done`;
+      summaryElem.textContent = `${total}/${total} done | Active: ${activeCount} | Non-active: ${nonActiveCount}`;
       progressBar.style.width = '100%';
       statusMessage.textContent = '✅ Complete! All URLs checked.';
 
@@ -526,17 +511,13 @@ https://another.example"></textarea><br>
         ].join(','))
       ].join('\n');
 
-      // Store CSV in localStorage for Page 2 to read
       localStorage.setItem('urlStatusResults', csvContent);
-
-      // Redirect to Page 2
       window.location.href = 'page2.html';
     }
 
     // Event listeners
     document.getElementById('checkBtn').addEventListener('click', checkUrls);
     
-    // Enter key support for textarea (Ctrl+Enter to check)
     document.getElementById('urlsInput').addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
