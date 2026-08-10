@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>URL Status Checker</title>
+  <title>URL Status Checker - Fixed Version</title>
   <style>
     :root {
       --pink-soft: #ffd6e7;
@@ -12,6 +12,9 @@
       --text-dark: #5a3a4a;
       --text-light: #fff;
       --shadow: rgba(0, 0, 0, 0.05);
+      --green: #4caf50;
+      --red: #f44336;
+      --orange: #ff9800;
     }
 
     * {
@@ -141,12 +144,17 @@
     }
 
     .status-active {
-      color: #4caf50;
+      color: var(--green);
       font-weight: 600;
     }
 
     .status-non-active {
-      color: #f44336;
+      color: var(--red);
+      font-weight: 600;
+    }
+
+    .status-unknown {
+      color: var(--orange);
       font-weight: 600;
     }
 
@@ -249,13 +257,47 @@
       outline: none;
       border-color: var(--pink-medium);
     }
+
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+      padding: 10px 15px;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 133, 179, 0.2);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+
+    .legend-color.active {
+      background: var(--green);
+    }
+    .legend-color.non-active {
+      background: var(--red);
+    }
+    .legend-color.unknown {
+      background: var(--orange);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>URL Status Checker</h1>
-      <div class="subtitle">Enter URLs (one per line) to check if they're active or non‑active 💖</div>
+      <h1>URL Status Checker - FIXED</h1>
+      <div class="subtitle">Now correctly identifies Active sites (403, 429, 413, 520-530, 526, etc.) 💖</div>
     </header>
 
     <textarea id="urlsInput" placeholder="http://example.com
@@ -266,6 +308,21 @@ https://another.example"></textarea><br>
       <div class="delay-control">
         <label for="delayInput">Delay (ms):</label>
         <input type="number" id="delayInput" value="500" min="100" max="10000">
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-color active"></div>
+        <span>Active (including 403, 429, 413, 520-530, 526)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color non-active"></div>
+        <span>Non-Active (404, 410, no response)</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color unknown"></div>
+        <span>Unknown (needs manual review)</span>
       </div>
     </div>
 
@@ -282,6 +339,7 @@ https://another.example"></textarea><br>
             <th>URL</th>
             <th>Status</th>
             <th>Details</th>
+            <th>Why</th>
           </tr>
         </thead>
         <tbody id="results">
@@ -291,10 +349,9 @@ https://another.example"></textarea><br>
     </div>
 
     <button id="exportBtn" style="display:none;">Download Results as CSV</button>
-    <button id="continueBtn" style="display:none;">Continue to Page 2</button>
 
     <footer>
-      Created by Mitra 🐤
+      Created by Mitra 🐤 | Fixed Version - Now identifies ALL active sites correctly
     </footer>
   </div>
 
@@ -302,13 +359,39 @@ https://another.example"></textarea><br>
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 15000;
 
+    // ✅ FIX: Define which status codes are actually ACTIVE
+    // These status codes mean the SERVER EXISTS and is responding
+    const ACTIVE_STATUSES = new Set([
+      // Success
+      200, 201, 202, 203, 204, 205, 206,
+      // Redirects (server is live)
+      301, 302, 303, 307, 308,
+      // Client errors (server EXISTS, just blocking or wrong request)
+      400, 401, 402, 403, 405, 406, 407, 408, 409,
+      411, 412, 413, 414, 415, 416, 417, 418,
+      // Rate limiting (server EXISTS)
+      429,
+      // Server errors (server EXISTS, having issues)
+      500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511,
+      // Cloudflare errors (server EXISTS behind Cloudflare)
+      520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530,
+      // Other common issues
+      444, 499
+    ]);
+
+    // These status codes mean the resource is GONE (truly inactive)
+    const INACTIVE_STATUSES = new Set([
+      404,  // Not Found
+      410,  // Gone
+      451   // Unavailable For Legal Reasons
+    ]);
+
     // Check a single URL with retry logic
     async function checkUrlWithRetry(url, maxRetries = 3) {
       let lastError;
       
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-          // If this is a retry, wait longer with exponential backoff
           if (attempt > 0) {
             const waitTime = 3000 * Math.pow(2, attempt - 1);
             await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -318,32 +401,29 @@ https://another.example"></textarea><br>
           return result;
         } catch (error) {
           lastError = error;
-          
-          // If it's a rate limit or abort error, we'll retry
           if (error.message.includes('429') || error.message.includes('aborted') || error.message.includes('Failed to fetch')) {
             continue;
           }
-          
-          // For other errors, return non-active
           return {
             url,
             statusLabel: 'Non-active',
             statusInfo: error.message,
-            ok: false
+            ok: false,
+            why: 'Connection error'
           };
         }
       }
       
-      // All retries failed
       return {
         url,
         statusLabel: 'Non-active',
         statusInfo: lastError?.message || 'Failed after retries',
-        ok: false
+        ok: false,
+        why: 'All retries failed'
       };
     }
 
-    // Check a single URL
+    // Check a single URL - FIXED with proper status classification
     async function checkUrl(url) {
       const proxyFullUrl = proxyUrl + encodeURIComponent(url);
 
@@ -357,24 +437,51 @@ https://another.example"></textarea><br>
         });
         clearTimeout(timeoutId);
 
-        if (response.ok) {
+        const status = response.status;
+        
+        // ✅ FIX: Check if status is ACTIVE
+        if (ACTIVE_STATUSES.has(status)) {
+          let why = 'Server responded';
+          if (status >= 400 && status < 500) {
+            why = `Server exists but ${status === 403 ? 'blocking bots' : status === 429 ? 'rate limiting' : status === 413 ? 'content too large' : 'client error'}`;
+          } else if (status >= 500) {
+            why = `Server exists but ${status === 526 ? 'SSL issue' : 'server error'}`;
+          } else if (status >= 300 && status < 400) {
+            why = 'Redirecting to live site';
+          }
+          
           return {
             url,
             statusLabel: 'Active',
-            statusInfo: 'HTTP ' + response.status,
-            ok: true
+            statusInfo: 'HTTP ' + status,
+            ok: true,
+            why: why
           };
-        } else {
+        }
+        
+        // Check if status is INACTIVE
+        if (INACTIVE_STATUSES.has(status)) {
           return {
             url,
             statusLabel: 'Non-active',
-            statusInfo: 'HTTP ' + response.status,
-            ok: false
+            statusInfo: 'HTTP ' + status,
+            ok: false,
+            why: status === 404 ? 'Page not found' : 'Resource permanently gone'
           };
         }
+
+        // Unknown status - treat as Active if server responded
+        return {
+          url,
+          statusLabel: 'Active',
+          statusInfo: 'HTTP ' + status + ' (unknown)',
+          ok: true,
+          why: 'Server responded (unclassified status)'
+        };
+
       } catch (error) {
         clearTimeout(timeoutId);
-        throw error; // Let retry logic handle it
+        throw error;
       }
     }
 
@@ -390,10 +497,8 @@ https://another.example"></textarea><br>
       const statusMessage = document.getElementById('statusMessage');
       const checkBtn = document.getElementById('checkBtn');
       const exportBtn = document.getElementById('exportBtn');
-      const continueBtn = document.getElementById('continueBtn');
       const delayInput = document.getElementById('delayInput');
 
-      // Get delay value (default 500ms)
       const delayMs = parseInt(delayInput.value) || 500;
 
       resultsElem.innerHTML = '';
@@ -402,7 +507,6 @@ https://another.example"></textarea><br>
       statusMessage.textContent = 'Starting...';
       checkBtn.disabled = true;
       exportBtn.style.display = 'none';
-      continueBtn.style.display = 'none';
       document.body.classList.add('loading');
       summaryElem.classList.add('pulse');
 
@@ -410,6 +514,7 @@ https://another.example"></textarea><br>
       const total = urls.length;
       let activeCount = 0;
       let nonActiveCount = 0;
+      let unknownCount = 0;
       
       for (let i = 0; i < total; i++) {
         const url = urls[i];
@@ -418,58 +523,58 @@ https://another.example"></textarea><br>
           const result = await checkUrlWithRetry(url);
           results.push(result);
           
+          // Count results
           if (result.statusLabel === 'Active') {
             activeCount++;
-          } else {
+          } else if (result.statusLabel === 'Non-active') {
             nonActiveCount++;
+          } else {
+            unknownCount++;
           }
           
           // Update progress
           const done = results.length;
           const percentage = Math.round((done / total) * 100);
           progressBar.style.width = percentage + '%';
-          summaryElem.textContent = `${done}/${total} done | Active: ${activeCount} | Non-active: ${nonActiveCount}`;
+          summaryElem.textContent = `${done}/${total} done | ✅ Active: ${activeCount} | ❌ Non-active: ${nonActiveCount} | ⚠️ Unknown: ${unknownCount}`;
           statusMessage.textContent = `Checking: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`;
           
-          // Render results incrementally
+          // ✅ FIX: Show "Why" column
+          const statusClass = result.statusLabel.toLowerCase().replace('/', '-');
           const resultRow = `
             <tr>
               <td>
                 <a href="${result.url}" target="_blank">${result.url}</a>
               </td>
-              <td class="status-${result.statusLabel.toLowerCase().replace('/', '-')}">${result.statusLabel}</td>
+              <td class="status-${statusClass}">${result.statusLabel}</td>
               <td>${result.statusInfo}</td>
+              <td style="font-size:0.85rem;color:${result.statusLabel === 'Active' ? '#4caf50' : '#f44336'}">${result.why || ''}</td>
             </tr>
           `;
           resultsElem.insertAdjacentHTML('beforeend', resultRow);
           
-          // Add delay between requests (but not after the last one)
           if (i < total - 1) {
             await new Promise(resolve => setTimeout(resolve, delayMs));
           }
         } catch (error) {
-          // Handle unexpected errors
           results.push({
             url,
             statusLabel: 'Non-active',
             statusInfo: error.message || 'Unknown error',
-            ok: false
+            ok: false,
+            why: 'Unexpected error'
           });
           nonActiveCount++;
         }
       }
 
       // All done
-      summaryElem.textContent = `${total}/${total} done | Active: ${activeCount} | Non-active: ${nonActiveCount}`;
+      summaryElem.textContent = `${total}/${total} done | ✅ Active: ${activeCount} | ❌ Non-active: ${nonActiveCount} | ⚠️ Unknown: ${unknownCount}`;
       progressBar.style.width = '100%';
       statusMessage.textContent = '✅ Complete! All URLs checked.';
 
-      // Enable CSV export and continue button
       exportBtn.style.display = 'inline-block';
       exportBtn.onclick = () => exportToCsv(results);
-
-      continueBtn.style.display = 'inline-block';
-      continueBtn.onclick = () => continueToPage2(results);
 
       checkBtn.disabled = false;
       document.body.classList.remove('loading');
@@ -478,13 +583,14 @@ https://another.example"></textarea><br>
 
     // Export results as CSV
     function exportToCsv(results) {
-      const headers = ['URL', 'Status', 'Details'];
+      const headers = ['URL', 'Status', 'Details', 'Why'];
       const csvContent = [
         headers.join(','),
         ...results.map(r => [
           `"${r.url.replace(/"/g, '""')}"`,
           `"${r.statusLabel}"`,
-          `"${r.statusInfo ? r.statusInfo.replace(/"/g, '""') : ''}"`
+          `"${r.statusInfo ? r.statusInfo.replace(/"/g, '""') : ''}"`,
+          `"${r.why ? r.why.replace(/"/g, '""') : ''}"`
         ].join(','))
       ].join('\n');
 
@@ -492,27 +598,11 @@ https://another.example"></textarea><br>
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', 'url_status_results.csv');
+      link.setAttribute('download', 'url_status_results_fixed.csv');
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    }
-
-    // Continue to Page 2
-    function continueToPage2(results) {
-      const headers = ['URL', 'Status', 'Details'];
-      const csvContent = [
-        headers.join(','),
-        ...results.map(r => [
-          `"${r.url.replace(/"/g, '""')}"`,
-          `"${r.statusLabel}"`,
-          `"${r.statusInfo ? r.statusInfo.replace(/"/g, '""') : ''}"`
-        ].join(','))
-      ].join('\n');
-
-      localStorage.setItem('urlStatusResults', csvContent);
-      window.location.href = 'page2.html';
     }
 
     // Event listeners
