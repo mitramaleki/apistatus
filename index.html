@@ -386,6 +386,16 @@ https://another.example"></textarea><br>
       451   // Unavailable For Legal Reasons
     ]);
 
+    // Helper function to get the base domain from a URL
+    function getBaseUrl(url) {
+      try {
+        const urlObj = new URL(url);
+        return urlObj.origin; // Returns scheme + domain (e.g., https://example.com)
+      } catch {
+        return null;
+      }
+    }
+
     // Check a single URL with retry logic
     async function checkUrlWithRetry(url, maxRetries = 3) {
       let lastError;
@@ -423,7 +433,7 @@ https://another.example"></textarea><br>
       };
     }
 
-    // Check a single URL - FIXED with proper status classification
+    // Check a single URL - FIXED with proper status classification AND base domain fallback
     async function checkUrl(url) {
       const proxyFullUrl = proxyUrl + encodeURIComponent(url);
 
@@ -459,7 +469,56 @@ https://another.example"></textarea><br>
           };
         }
         
-        // Check if status is INACTIVE
+        // --- NEW: Fallback Logic for 404 ---
+        if (status === 404) {
+          const baseUrl = getBaseUrl(url);
+          if (baseUrl && baseUrl !== url) {
+            // Check the base domain
+            const baseProxyUrl = proxyUrl + encodeURIComponent(baseUrl);
+            const baseController = new AbortController();
+            const baseTimeoutId = setTimeout(() => baseController.abort(), timeoutMs);
+
+            try {
+              const baseResponse = await fetch(baseProxyUrl, {
+                signal: baseController.signal,
+                redirect: 'follow'
+              });
+              clearTimeout(baseTimeoutId);
+
+              // If the base domain is active, report the original URL as "Active"
+              if (ACTIVE_STATUSES.has(baseResponse.status)) {
+                return {
+                  url,
+                  statusLabel: 'Active',
+                  statusInfo: 'Base domain active (original page 404)',
+                  ok: true,
+                  why: `Base domain (${baseUrl}) is active`
+                };
+              } else {
+                // Base domain is also not active
+                return {
+                  url,
+                  statusLabel: 'Non-active',
+                  statusInfo: 'HTTP 404 (original page + base domain check failed)',
+                  ok: false,
+                  why: 'Page and base domain both inaccessible'
+                };
+              }
+            } catch (baseError) {
+              // Fallback check failed
+              return {
+                url,
+                statusLabel: 'Non-active',
+                statusInfo: 'HTTP 404 (base domain check failed)',
+                ok: false,
+                why: 'Page 404, base domain check error'
+              };
+            }
+          }
+        }
+        // --- End of Fallback Logic ---
+
+        // Check if status is truly INACTIVE (410, 451)
         if (INACTIVE_STATUSES.has(status)) {
           return {
             url,
