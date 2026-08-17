@@ -1,360 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>URL Status Checker - Fixed Version</title>
-  <style>
-    :root {
-      --pink-soft: #ffd6e7;
-      --pink-medium: #ff85b3;
-      --pink-dark: #e75480;
-      --text-dark: #5a3a4a;
-      --text-light: #fff;
-      --shadow: rgba(0, 0, 0, 0.05);
-      --green: #4caf50;
-      --red: #f44336;
-      --orange: #ff9800;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background: linear-gradient(135deg, #ffe6f2 0%, #ffcce6 100%);
-      color: var(--text-dark);
-      min-height: 100vh;
-    }
-
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    h1 {
-      font-size: 2.5rem;
-      color: var(--pink-dark);
-      margin: 0;
-      text-shadow: 1px 1px 2px var(--shadow);
-    }
-
-    .subtitle {
-      font-size: 1.1rem;
-      color: var(--pink-medium);
-      margin-top: 5px;
-    }
-
-    textarea {
-      width: 100%;
-      height: 120px;
-      padding: 12px;
-      border: 1px solid rgba(255, 133, 179, 0.3);
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 1rem;
-      background: rgba(255, 255, 255, 0.8);
-      resize: vertical;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: var(--pink-medium);
-      box-shadow: 0 0 0 2px rgba(255, 133, 179, 0.2);
-    }
-
-    button {
-      margin: 10px 0;
-      padding: 10px 20px;
-      background: var(--pink-medium);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
-    }
-
-    button:hover:not(:disabled) {
-      background: var(--pink-dark);
-      transform: translateY(-1px);
-    }
-
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .summary {
-      background: rgba(255, 255, 255, 0.8);
-      padding: 15px 20px;
-      border-radius: 12px;
-      margin: 20px 0;
-      text-align: center;
-      font-size: 1.1rem;
-      color: var(--pink-dark);
-      box-shadow: 0 2px 8px var(--shadow);
-      border: 1px solid rgba(255, 133, 179, 0.2);
-    }
-
-    .table-wrapper {
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px var(--shadow);
-      border: 1px solid rgba(255, 133, 179, 0.2);
-      margin-top: 20px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    th {
-      background: var(--pink-soft);
-      color: var(--pink-dark);
-      padding: 16px 12px;
-      text-align: left;
-      font-weight: 600;
-      border-bottom: 2px solid var(--pink-medium);
-    }
-
-    td {
-      padding: 14px 12px;
-      border-bottom: 1px solid rgba(255, 133, 179, 0.2);
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover {
-      background: rgba(255, 214, 231, 0.3);
-    }
-
-    .status-active {
-      color: var(--green);
-      font-weight: 600;
-    }
-
-    .status-non-active {
-      color: var(--red);
-      font-weight: 600;
-    }
-
-    .status-unknown {
-      color: var(--orange);
-      font-weight: 600;
-    }
-
-    .redirect-url {
-      font-size: 0.85em;
-      color: var(--pink-medium);
-      margin-top: 2px;
-    }
-
-    a {
-      color: var(--pink-dark);
-      text-decoration: none;
-    }
-
-    a:hover {
-      text-decoration: underline;
-    }
-
-    .loading {
-      opacity: 0.7;
-      pointer-events: none;
-    }
-
-    .pulse {
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.6; }
-      100% { opacity: 1; }
-    }
-
-    footer {
-      text-align: center;
-      margin-top: 30px;
-      font-size: 0.9rem;
-      color: var(--pink-medium);
-    }
-
-    .progress-container {
-      width: 100%;
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 8px;
-      margin: 10px 0;
-      overflow: hidden;
-      height: 8px;
-    }
-
-    .progress-bar {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, var(--pink-soft), var(--pink-medium));
-      border-radius: 8px;
-      transition: width 0.3s ease;
-    }
-
-    .status-message {
-      font-size: 0.9rem;
-      color: var(--pink-medium);
-      margin-top: 5px;
-    }
-
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin: 10px 0;
-    }
-
-    .controls button {
-      margin: 0;
-    }
-
-    .delay-control {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(255, 255, 255, 0.8);
-      padding: 8px 15px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 133, 179, 0.2);
-    }
-
-    .delay-control label {
-      font-size: 0.9rem;
-      color: var(--text-dark);
-    }
-
-    .delay-control input {
-      width: 80px;
-      padding: 4px 8px;
-      border: 1px solid rgba(255, 133, 179, 0.3);
-      border-radius: 4px;
-      font-size: 0.9rem;
-    }
-
-    .delay-control input:focus {
-      outline: none;
-      border-color: var(--pink-medium);
-    }
-
-    .legend {
-      display: flex;
-      gap: 20px;
-      flex-wrap: wrap;
-      margin: 10px 0;
-      padding: 10px 15px;
-      background: rgba(255, 255, 255, 0.8);
-      border-radius: 8px;
-      border: 1px solid rgba(255, 133, 179, 0.2);
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.9rem;
-    }
-
-    .legend-color {
-      width: 16px;
-      height: 16px;
-      border-radius: 4px;
-    }
-
-    .legend-color.active {
-      background: var(--green);
-    }
-    .legend-color.non-active {
-      background: var(--red);
-    }
-    .legend-color.unknown {
-      background: var(--orange);
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>URL Status Checker - FIXED</h1>
-      <div class="subtitle">Now correctly identifies Active sites (403, 429, 413, 520-530, 526, etc.) 💖</div>
-    </header>
-
-    <textarea id="urlsInput" placeholder="http://example.com
-https://another.example"></textarea><br>
-
-    <div class="controls">
-      <button id="checkBtn">Check URLs</button>
-      <div class="delay-control">
-        <label for="delayInput">Delay (ms):</label>
-        <input type="number" id="delayInput" value="500" min="100" max="10000">
-      </div>
-    </div>
-
-    <div class="legend">
-      <div class="legend-item">
-        <div class="legend-color active"></div>
-        <span>Active (including 403, 429, 413, 520-530, 526)</span>
-      </div>
-      <div class="legend-item">
-        <div class="legend-color non-active"></div>
-        <span>Non-Active (404, 410, no response)</span>
-      </div>
-      <div class="legend-item">
-        <div class="legend-color unknown"></div>
-        <span>Unknown (needs manual review)</span>
-      </div>
-    </div>
-
-    <div class="summary" id="summary"></div>
-    <div class="progress-container">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-    <div class="status-message" id="statusMessage"></div>
-
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>URL</th>
-            <th>Status</th>
-            <th>Details</th>
-            <th>Why</th>
-          </tr>
-        </thead>
-        <tbody id="results">
-          <!-- Results will be inserted here -->
-        </tbody>
-      </table>
-    </div>
-
-    <button id="exportBtn" style="display:none;">Download Results as CSV</button>
-
-    <footer>
-      Created by Mitra 🐤 | Fixed Version - Now identifies ALL active sites correctly
-    </footer>
-  </div>
-
   <script>
     const proxyUrl = 'https://corsproxy.io/?';
     const timeoutMs = 15000;
@@ -386,6 +29,16 @@ https://another.example"></textarea><br>
       451   // Unavailable For Legal Reasons
     ]);
 
+    // ✅ NEW: Helper function to normalize URLs
+    function normalizeUrl(url) {
+      url = url.trim();
+      // If URL doesn't have a protocol, add https://
+      if (!/^https?:\/\//i.test(url)) {
+        return 'https://' + url;
+      }
+      return url;
+    }
+
     // Helper function to get the base domain from a URL
     function getBaseUrl(url) {
       try {
@@ -398,6 +51,8 @@ https://another.example"></textarea><br>
 
     // Check a single URL with retry logic
     async function checkUrlWithRetry(url, maxRetries = 3) {
+      // ✅ FIX: Normalize the URL before checking
+      const normalizedUrl = normalizeUrl(url);
       let lastError;
       
       for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -407,7 +62,7 @@ https://another.example"></textarea><br>
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
           
-          const result = await checkUrl(url);
+          const result = await checkUrl(normalizedUrl);
           return result;
         } catch (error) {
           lastError = error;
@@ -415,7 +70,7 @@ https://another.example"></textarea><br>
             continue;
           }
           return {
-            url,
+            url: normalizedUrl,
             statusLabel: 'Non-active',
             statusInfo: error.message,
             ok: false,
@@ -425,7 +80,7 @@ https://another.example"></textarea><br>
       }
       
       return {
-        url,
+        url: normalizedUrl,
         statusLabel: 'Non-active',
         statusInfo: lastError?.message || 'Failed after retries',
         ok: false,
@@ -596,7 +251,7 @@ https://another.example"></textarea><br>
           const percentage = Math.round((done / total) * 100);
           progressBar.style.width = percentage + '%';
           summaryElem.textContent = `${done}/${total} done | ✅ Active: ${activeCount} | ❌ Non-active: ${nonActiveCount} | ⚠️ Unknown: ${unknownCount}`;
-          statusMessage.textContent = `Checking: ${url.substring(0, 50)}${url.length > 50 ? '...' : ''}`;
+          statusMessage.textContent = `Checking: ${result.url.substring(0, 50)}${result.url.length > 50 ? '...' : ''}`;
           
           // ✅ FIX: Show "Why" column
           const statusClass = result.statusLabel.toLowerCase().replace('/', '-');
@@ -674,5 +329,3 @@ https://another.example"></textarea><br>
       }
     });
   </script>
-</body>
-</html>
